@@ -347,6 +347,35 @@ def perform_create(self, serializer):
     serializer.save(user=self.request.user)
 ```
 
+#### get_success_headers()
+
+**Signature:** `get_success_headers(data)`
+
+Returns a dictionary of headers to include in the response for successful object creation. By default, includes a `Location` header pointing to the newly created object.
+
+<ParamField path="data" type="dict" required>
+  The serialized representation of the created object.
+</ParamField>
+
+**Returns:** `dict` - Headers dictionary
+
+```python
+def get_success_headers(self, data):
+    try:
+        return {'Location': str(data[api_settings.URL_FIELD_NAME])}
+    except (TypeError, KeyError):
+        return {}
+```
+
+Override this method to customize the success headers:
+
+```python
+def get_success_headers(self, data):
+    headers = super().get_success_headers(data)
+    headers['X-Custom-Header'] = 'value'
+    return headers
+```
+
 ### RetrieveModelMixin
 
 **Signature:** `class RetrieveModelMixin`

@@ -622,6 +622,92 @@ def my_view(request):
     return Response({"message": "Authenticated!"})
 ```
 
+### @content_negotiation_class()
+
+**Signature:** `@content_negotiation_class(content_negotiation_class)`
+
+Sets the content negotiation class for the view.
+
+<ParamField path="content_negotiation_class" type="class" required>
+  The content negotiation class to use.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view, content_negotiation_class
+from rest_framework.negotiation import DefaultContentNegotiation
+
+@api_view(['GET'])
+@content_negotiation_class(DefaultContentNegotiation)
+def my_view(request):
+    return Response({"message": "Hello"})
+```
+
+### @metadata_class()
+
+**Signature:** `@metadata_class(metadata_class)`
+
+Sets the metadata class for the view. Used for OPTIONS requests.
+
+<ParamField path="metadata_class" type="class" required>
+  The metadata class to use.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view, metadata_class
+from rest_framework.metadata import SimpleMetadata
+
+@api_view(['GET'])
+@metadata_class(SimpleMetadata)
+def my_view(request):
+    return Response({"message": "Hello"})
+```
+
+### @versioning_class()
+
+**Signature:** `@versioning_class(versioning_class)`
+
+Sets the versioning class for the view.
+
+<ParamField path="versioning_class" type="class" required>
+  The versioning class to use.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view, versioning_class
+from rest_framework.versioning import URLPathVersioning
+
+@api_view(['GET'])
+@versioning_class(URLPathVersioning)
+def my_view(request):
+    return Response({"version": request.version})
+```
+
+### @schema()
+
+**Signature:** `@schema(view_inspector)`
+
+Sets the schema inspector for the view. Used for OpenAPI schema generation.
+
+<ParamField path="view_inspector" type="class or None" required>
+  The schema inspector class to use, or None to exclude from schema.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view, schema
+from rest_framework.schemas import AutoSchema
+
+@api_view(['GET'])
+@schema(AutoSchema())
+def my_view(request):
+    return Response({"message": "Hello"})
+
+# Exclude from schema
+@api_view(['GET'])
+@schema(None)
+def internal_view(request):
+    return Response({"message": "Internal only"})
+```
+
 ---
 
 ## Utility Functions
