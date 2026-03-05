@@ -1,0 +1,182 @@
+{
+  "projectType": "framework",
+  "projectName": "Django REST Framework",
+  "projectDescription": "A powerful and flexible toolkit for building Web APIs with Django",
+  "theme": "aspen",
+  "primaryColor": "#a40404",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Tutorial",
+            "pages": [
+              "tutorial/1-serialization",
+              "tutorial/2-requests-and-responses",
+              "tutorial/3-class-based-views",
+              "tutorial/4-authentication-and-permissions",
+              "tutorial/5-relationships-and-hyperlinked-apis",
+              "tutorial/6-viewsets-and-routers"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/serialization",
+              "concepts/views-and-viewsets",
+              "concepts/request-response-cycle"
+            ]
+          },
+          {
+            "group": "Topics",
+            "pages": [
+              "topics/documenting-your-api",
+              "topics/browsable-api",
+              "topics/ajax-csrf-cors",
+              "topics/html-and-forms",
+              "topics/internationalization",
+              "topics/browser-enhancements",
+              "topics/rest-hypermedia-hateoas"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Views & ViewSets",
+            "pages": [
+              "api/views",
+              "api/generic-views",
+              "api/viewsets",
+              "api/routers"
+            ]
+          },
+          {
+            "group": "Serializers",
+            "pages": [
+              "api/serializers",
+              "api/fields",
+              "api/relations",
+              "api/validators"
+            ]
+          },
+          {
+            "group": "Requests & Responses",
+            "pages": [
+              "api/requests",
+              "api/responses",
+              "api/status-codes",
+              "api/exceptions"
+            ]
+          },
+          {
+            "group": "Authentication & Permissions",
+            "pages": [
+              "api/authentication",
+              "api/permissions",
+              "api/throttling"
+            ]
+          },
+          {
+            "group": "Parsers & Renderers",
+            "pages": [
+              "api/parsers",
+              "api/renderers",
+              "api/content-negotiation"
+            ]
+          },
+          {
+            "group": "Additional Components",
+            "pages": [
+              "api/pagination",
+              "api/filtering",
+              "api/versioning",
+              "api/schemas",
+              "api/metadata",
+              "api/format-suffixes",
+              "api/reverse",
+              "api/caching",
+              "api/testing",
+              "api/settings"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Community",
+        "groups": [
+          {
+            "group": "Resources",
+            "pages": [
+              "community/tutorials-and-resources",
+              "community/third-party-packages"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "community/contributing",
+              "community/project-management"
+            ]
+          },
+          {
+            "group": "Release Notes",
+            "pages": [
+              "community/release-notes",
+              "community/3.16-announcement",
+              "community/3.15-announcement"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Powerful serialization system supporting both ORM and non-ORM data sources",
+    "Class-based and function-based views with generic views and viewsets",
+    "Automatic URL routing with routers",
+    "Flexible authentication including session, token, and OAuth support",
+    "Granular permission controls",
+    "Built-in pagination, filtering, and throttling",
+    "Web browsable API for easy debugging and exploration",
+    "Multiple renderer support (JSON, XML, YAML, etc.)",
+    "Comprehensive content negotiation",
+    "Extensive validation and error handling"
+  ],
+  "publicApiSurface": [
+    "rest_framework.serializers.Serializer",
+    "rest_framework.serializers.ModelSerializer",
+    "rest_framework.serializers.HyperlinkedModelSerializer",
+    "rest_framework.views.APIView",
+    "rest_framework.generics.GenericAPIView",
+    "rest_framework.viewsets.ViewSet",
+    "rest_framework.viewsets.ModelViewSet",
+    "rest_framework.routers.DefaultRouter",
+    "rest_framework.routers.SimpleRouter",
+    "rest_framework.decorators.api_view",
+    "rest_framework.decorators.action",
+    "rest_framework.authentication.TokenAuthentication",
+    "rest_framework.authentication.SessionAuthentication",
+    "rest_framework.permissions.IsAuthenticated",
+    "rest_framework.permissions.IsAdminUser",
+    "rest_framework.response.Response",
+    "rest_framework.request.Request",
+    "rest_framework.parsers.JSONParser",
+    "rest_framework.renderers.JSONRenderer",
+    "rest_framework.pagination.PageNumberPagination"
+  ]
+}
