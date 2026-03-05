@@ -1,0 +1,230 @@
+---
+title: Release Notes
+description: Version history and upgrade guide for Django REST Framework
+---
+
+## Versioning
+
+Django REST Framework follows a semantic-like versioning scheme:
+
+<CardGroup cols={3}>
+  <Card title="Minor (0.0.x)" icon="circle-dot">
+    API compatible changes. You can upgrade without code changes.
+  </Card>
+  
+  <Card title="Medium (0.x.0)" icon="circle-half-stroke">
+    May include API changes following the deprecation policy. Read release notes carefully.
+  </Card>
+  
+  <Card title="Major (x.0.0)" icon="circle">
+    Reserved for substantial project milestones.
+  </Card>
+</CardGroup>
+
+<Info>
+As REST Framework is considered feature-complete, most releases are expected to be minor releases.
+</Info>
+
+## Deprecation Policy
+
+REST framework releases follow a formal deprecation policy, which is in line with [Django's deprecation policy](https://docs.djangoproject.com/en/dev/internals/release-process/#internal-release-deprecation-policy).
+
+The timeline for deprecation of a feature present in version 1.0 would work as follows:
+
+<Steps>
+  <Step title="Version 1.1 - Silent Warnings">
+    Remains **fully backwards compatible** with 1.0, but raises `RemovedInDRF13Warning` warnings (subclassing `PendingDeprecationWarning`). These warnings are **silent by default**, but can be explicitly enabled with:
+    
+    ```bash
+    python -Wd manage.py test
+    ```
+  </Step>
+  
+  <Step title="Version 1.2 - Loud Warnings">
+    Escalates warnings to subclass `DeprecationWarning`, which is **loud by default**.
+  </Step>
+  
+  <Step title="Version 1.3 - Removal">
+    Removes the deprecated bits of API entirely.
+  </Step>
+</Steps>
+
+<Warning>
+In line with Django's policy, any parts of the framework not mentioned in the documentation should generally be considered private API, and may be subject to change.
+</Warning>
+
+## Upgrading
+
+To upgrade Django REST framework to the latest version, use pip:
+
+```bash
+pip install -U djangorestframework
+```
+
+You can determine your currently installed version:
+
+```bash
+pip show djangorestframework
+```
+
+## Release History
+
+### 3.16.x series
+
+<AccordionGroup>
+  <Accordion title="3.16.1 - August 6, 2025">
+    This release fixes a few bugs, cleans up old code paths for unsupported Python versions and improves translations.
+    
+    **Minor Changes:**
+    - Cleanup optional `backports.zoneinfo` dependency for Python 3.8 and lower
+    
+    **Bug Fixes:**
+    - Fix regression in `unique_together` validation with `SerializerMethodField`
+    - Fix `UniqueTogetherValidator` to handle fields with `source` attribute
+    - Drop HTML line breaks on long headers in browsable API
+    
+    **Translations:**
+    - Add Kazakh locale support
+    - Update Korean, German, Chinese, Arabic, Persian, Spanish, and Turkish translations
+    - Fix typos in Brazilian Portuguese translations
+    
+    [Full Changelog](https://github.com/encode/django-rest-framework/compare/3.16.0...3.16.1)
+  </Accordion>
+  
+  <Accordion title="3.16.0 - March 28, 2025">
+    This release improves upstream support with Django and Python. Some fixes around `UniqueConstraint` with nullable fields will improve built-in serializer validation.
+    
+    **Features:**
+    - Add official support for Django 5.1, 5.2a1 and Python 3.13
+    - Support Django 2.1+ test client JSON data automatically serialized
+    
+    **Bug Fixes:**
+    - Fix unique together validator to respect `UniqueConstraint` conditions
+    - Fix raising on nullable fields part of `UniqueConstraint`
+    - Fix `unique_together` validation with source
+    - Added protections to `AttributeError` raised within properties
+    
+    **Removals:**
+    - Remove support for Python 3.8
+    - Remove long deprecated code from request wrapper
+    - Remove deprecated `AutoSchema._get_reference` method
+    
+    [Full Changelog](https://github.com/encode/django-rest-framework/compare/3.15.2...3.16.0)
+  </Accordion>
+</AccordionGroup>
+
+### 3.15.x series
+
+<AccordionGroup>
+  <Accordion title="3.15.2 - June 14, 2024">
+    - Fix potential XSS vulnerability in browsable API
+    - Revert "Ensure CursorPagination respects nulls in the ordering field"
+    - Use warnings rather than logging for DecimalField
+    - Remove unused code
+    - Django < 4.2 and Python < 3.8 no longer supported
+  </Accordion>
+  
+  <Accordion title="3.15.1 - March 22, 2024">
+    - Fix `SearchFilter` handling of quoted and comma separated strings
+    - Revert number of 3.15.0 issues with unintended side-effects
+  </Accordion>
+  
+  <Accordion title="3.15.0 - March 15, 2024">
+    **Major Features:**
+    - Django 5.0 and Python 3.12 support
+    - Use POST method instead of GET to perform logout in browsable API
+    - jQuery 3.7.1 support
+    - Use str as default path converter
+    - Primary support for `UniqueConstraint`
+    - Remove dependency on `pytz`
+    - Support `SimplePathRouter`
+    
+    **Improvements:**
+    - Align SearchFilter behavior to django.contrib.admin search
+    - Propagate 'default' from model field to serializer field
+    - Fix choices in ChoiceField to support IntEnum
+    - Allow Request, Response, Field, and GenericAPIView to be subscriptable for type checking
+    
+    [Full details in release notes](https://github.com/encode/django-rest-framework/compare/3.14.0...3.15.0)
+  </Accordion>
+</AccordionGroup>
+
+### 3.14.x series
+
+<Accordion title="3.14.0 - September 22, 2022">
+  - Django 2.2 is no longer supported
+  - Django 4.1 compatibility
+  - Add `--api-version` CLI option to `generateschema` management command
+  - Enforce `is_valid(raise_exception=False)` as a keyword-only argument
+  - Stop calling `set_context` on Validators
+  - Make relative URLs clickable in Browsable API
+</Accordion>
+
+### 3.13.x series
+
+<AccordionGroup>
+  <Accordion title="3.13.1 - December 15, 2021">
+    Revert schema naming changes with function based `@api_view`.
+  </Accordion>
+  
+  <Accordion title="3.13.0 - December 13, 2021">
+    - Django 4.0 compatibility
+    - Add `max_length` and `min_length` options to `ListSerializer`
+    - Add `get_request_serializer` and `get_response_serializer` hooks to `AutoSchema`
+    - Fix OpenAPI representation of null-able read only fields
+    - Respect `UNICODE_JSON` setting in API schema outputs
+    - Make Field constructors keyword-only
+  </Accordion>
+</AccordionGroup>
+
+### Earlier Versions
+
+<Card title="View Complete Release History" href="https://github.com/encode/django-rest-framework/releases" icon="github">
+  For detailed information about earlier releases (3.12.x, 3.11.x, 3.10.x, and beyond), please visit the GitHub releases page.
+</Card>
+
+## Upgrade Guides
+
+### Upgrading to 3.16
+
+<Warning>
+**Breaking Changes:**
+
+- Python 3.8 is no longer supported. Minimum version is now Python 3.9
+- Improved `UniqueConstraint` validation may affect existing behavior with nullable fields
+</Warning>
+
+### Upgrading to 3.15
+
+<Warning>
+**Breaking Changes:**
+
+- `pytz` dependency removed - Django's ZoneInfo is now used
+- POST method now used for logout in browsable API (was GET)
+- SearchFilter behavior aligned with Django admin (quoted phrases, null-character validation)
+</Warning>
+
+### Upgrading to 3.14
+
+<Warning>
+**Breaking Changes:**
+
+- Django 2.2 is no longer supported
+- `is_valid(raise_exception=False)` must be called as keyword argument
+- Validators no longer have `set_context` called
+</Warning>
+
+## Support Policy
+
+<Info>
+We **highly recommend** and only officially support the latest patch release of each Python and Django series.
+</Info>
+
+### Current Support
+
+- **Python:** 3.9, 3.10, 3.11, 3.12, 3.13
+- **Django:** 4.2 LTS, 5.0, 5.1, 5.2 (upcoming LTS)
+
+### Security Updates
+
+Security issues are taken seriously. Please see the [security policy](https://github.com/encode/django-rest-framework/security/policy) for reporting vulnerabilities.

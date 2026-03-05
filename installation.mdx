@@ -1,0 +1,190 @@
+---
+title: Installation
+description: Install Django REST Framework and configure your project
+icon: "download"
+---
+
+## Requirements
+
+Django REST Framework requires the following versions:
+
+<CardGroup cols={2}>
+  <Card title="Python" icon="python" color="#a40404">
+    3.10, 3.11, 3.12, 3.13, 3.14
+  </Card>
+  <Card title="Django" icon="code" color="#a40404">
+    4.2, 5.0, 5.1, 5.2, 6.0
+  </Card>
+</CardGroup>
+
+<Note>
+We **highly recommend** and only officially support the latest patch release of each Python and Django series.
+</Note>
+
+## Install Django REST Framework
+
+<Steps>
+  <Step title="Install using pip">
+    Install the core package:
+    
+    ```bash
+    pip install djangorestframework
+    ```
+    
+    You can also install optional packages for additional features:
+    
+    ```bash
+    pip install markdown       # Markdown support for the browsable API
+    pip install django-filter  # Filtering support
+    ```
+  </Step>
+  
+  <Step title="Add to INSTALLED_APPS">
+    Add `'rest_framework'` to your `INSTALLED_APPS` setting in `settings.py`:
+    
+    ```python settings.py
+    INSTALLED_APPS = [
+        # Django default apps
+        "django.contrib.admin",
+        "django.contrib.auth",
+        "django.contrib.contenttypes",
+        "django.contrib.sessions",
+        "django.contrib.messages",
+        "django.contrib.staticfiles",
+        
+        # Third-party apps
+        "rest_framework",
+    ]
+    ```
+  </Step>
+  
+  <Step title="Configure browsable API (Optional)">
+    If you want to use the browsable API, add REST framework's login and logout views to your root `urls.py`:
+    
+    ```python urls.py
+    from django.urls import path, include
+    
+    urlpatterns = [
+        # ...
+        path("api-auth/", include("rest_framework.urls")),
+    ]
+    ```
+    
+    <Note>
+    The URL path can be customized to whatever you prefer.
+    </Note>
+  </Step>
+</Steps>
+
+## Optional Packages
+
+Django REST Framework supports several optional packages that enhance functionality:
+
+<AccordionGroup>
+  <Accordion title="Schema Generation" icon="sitemap">
+    For automatic schema generation support:
+    
+    ```bash
+    pip install pyyaml uritemplate
+    ```
+    
+    - **PyYAML** (5.1+) - YAML support for schemas
+    - **uritemplate** (3.0.0+) - URI template parsing
+  </Accordion>
+  
+  <Accordion title="Browsable API Enhancement" icon="browser">
+    For enhanced browsable API with syntax highlighting:
+    
+    ```bash
+    pip install markdown pygments
+    ```
+    
+    - **Markdown** (3.3.0+) - Markdown support for the browsable API
+    - **Pygments** (2.7.0+) - Syntax highlighting for code blocks
+  </Accordion>
+  
+  <Accordion title="Filtering & Permissions" icon="filter">
+    For advanced filtering and object-level permissions:
+    
+    ```bash
+    pip install django-filter django-guardian
+    ```
+    
+    - **django-filter** (1.0.1+) - Advanced filtering support
+    - **django-guardian** (1.1.1+) - Object-level permissions
+  </Accordion>
+</AccordionGroup>
+
+## Global Configuration
+
+You can configure global settings for your REST framework API by adding a `REST_FRAMEWORK` dictionary to your `settings.py`:
+
+```python settings.py
+REST_FRAMEWORK = {
+    # Use Django's standard django.contrib.auth permissions,
+    # or allow read-only access for unauthenticated users.
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly",
+    ],
+    
+    # Enable pagination
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 10,
+}
+```
+
+<Tip>
+You don't need to add this configuration initially. REST framework works out of the box with sensible defaults.
+</Tip>
+
+## Install from Source
+
+If you want to work with the latest development version, you can clone the repository:
+
+```bash
+git clone https://github.com/encode/django-rest-framework
+cd django-rest-framework
+pip install -e .
+```
+
+<Warning>
+The development version may contain bugs and breaking changes. Use the stable PyPI release for production applications.
+</Warning>
+
+## Verify Installation
+
+You can verify your installation by running the Django shell:
+
+```bash
+python manage.py shell
+```
+
+Then import REST framework:
+
+```python
+import rest_framework
+print(rest_framework.VERSION)
+```
+
+If the import succeeds, you're ready to start building APIs!
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card 
+    title="Quick Start" 
+    icon="rocket" 
+    href="/quickstart"
+    color="#a40404"
+  >
+    Build your first API in minutes
+  </Card>
+  <Card 
+    title="Tutorial" 
+    icon="book" 
+    href="/tutorial/1-serialization"
+    color="#a40404"
+  >
+    Learn REST framework step by step
+  </Card>
+</CardGroup>

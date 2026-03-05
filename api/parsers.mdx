@@ -1,0 +1,333 @@
+---
+title: Parsers
+description: API reference for Django REST Framework parser classes
+---
+
+Parsers are used to parse the content of incoming HTTP requests. They give us a generic way of being able to handle various media types on the request, such as form content or JSON encoded data.
+
+## How the parser is determined
+
+The set of valid parsers for a view is always defined as a list of classes. When `request.data` is accessed, REST framework will examine the `Content-Type` header on the incoming request, and determine which parser to use to parse the request content.
+
+<Note>
+When developing client applications, always remember to set the `Content-Type` header when sending data in an HTTP request. If you don't set the content type, most clients will default to using `'application/x-www-form-urlencoded'`.
+</Note>
+
+## Setting the parsers
+
+The default set of parsers may be set globally, using the `DEFAULT_PARSER_CLASSES` setting:
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+    ]
+}
+```
+
+You can also set the parsers used for an individual view or viewset using the `APIView` class-based views:
+
+```python
+from rest_framework.parsers import JSONParser
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+class ExampleView(APIView):
+    """
+    A view that can accept POST requests with JSON content.
+    """
+    parser_classes = [JSONParser]
+
+    def post(self, request, format=None):
+        return Response({'received data': request.data})
+```
+
+Or, if you're using the `@api_view` decorator with function based views:
+
+```python
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import JSONParser
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def example_view(request, format=None):
+    """
+    A view that can accept POST requests with JSON content.
+    """
+    return Response({'received data': request.data})
+```
+
+---
+
+## Built-in Parsers
+
+### BaseParser
+
+`rest_framework.parsers.BaseParser`
+
+All parsers should extend `BaseParser`, specifying a `media_type` attribute, and overriding the `.parse()` method.
+
+#### Attributes
+
+<ParamField path="media_type" type="str" default="None">
+  The media type that this parser handles (e.g., `'application/json'`)
+</ParamField>
+
+#### Methods
+
+<ParamField path="parse(stream, media_type=None, parser_context=None)" type="method">
+  Given a stream to read from, return the parsed representation. Should return parsed data, or a `DataAndFiles` object consisting of the parsed data and files.
+  
+  **Arguments:**
+  - `stream` - A stream-like object representing the body of the request
+  - `media_type` - Optional. The media type of the incoming request content
+  - `parser_context` - Optional. A dictionary containing additional context (includes `view`, `request`, `args`, `kwargs` by default)
+</ParamField>
+
+---
+
+### JSONParser
+
+`rest_framework.parsers.JSONParser`
+
+Parses JSON-serialized data. `request.data` will be populated with a dictionary of data.
+
+#### Attributes
+
+<ParamField path="media_type" type="str" default="'application/json'">
+  The media type handled by this parser
+</ParamField>
+
+<ParamField path="renderer_class" type="class" default="JSONRenderer">
+  The corresponding renderer class
+</ParamField>
+
+<ParamField path="strict" type="bool" default="api_settings.STRICT_JSON">
+  Whether to use strict JSON parsing (controlled by the `STRICT_JSON` setting)
+</ParamField>
+
+#### Example
+
+```python
+from rest_framework.parsers import JSONParser
+from rest_framework.views import APIView
+
+class JSONOnlyView(APIView):
+    parser_classes = [JSONParser]
+    
+    def post(self, request):
+        # request.data contains parsed JSON
+        return Response(request.data)
+```
+
+---
+
+### FormParser
+
+`rest_framework.parsers.FormParser`
+
+Parses HTML form content. `request.data` will be populated with a `QueryDict` of data.
+
+You will typically want to use both `FormParser` and `MultiPartParser` together in order to fully support HTML form data.
+
+#### Attributes
+
+<ParamField path="media_type" type="str" default="'application/x-www-form-urlencoded'">
+  The media type handled by this parser
+</ParamField>
+
+#### Example
+
+```python
+from rest_framework.parsers import FormParser, MultiPartParser
+
+class FormView(APIView):
+    parser_classes = [FormParser, MultiPartParser]
+    
+    def post(self, request):
+        return Response({'data': request.data})
+```
+
+---
+
+### MultiPartParser
+
+`rest_framework.parsers.MultiPartParser`
+
+Parses multipart HTML form content, which supports file uploads. Both `request.data` and `request.FILES` will be populated with `QueryDict` instances.
+
+You will typically want to use both `FormParser` and `MultiPartParser` together in order to fully support HTML form data.
+
+#### Attributes
+
+<ParamField path="media_type" type="str" default="'multipart/form-data'">
+  The media type handled by this parser
+</ParamField>
+
+#### Example
+
+```python
+from rest_framework.parsers import MultiPartParser
+from rest_framework.response import Response
+
+class FileUploadView(APIView):
+    parser_classes = [MultiPartParser]
+    
+    def post(self, request):
+        file_obj = request.FILES['file']
+        return Response({
+            'filename': file_obj.name,
+            'size': file_obj.size
+        })
+```
+
+---
+
+### FileUploadParser
+
+`rest_framework.parsers.FileUploadParser`
+
+Parses raw file upload content. The `request.data` property will be empty, and `request.FILES` will contain a single key `'file'` with the uploaded file.
+
+If the view used with `FileUploadParser` is called with a `filename` URL keyword argument, then that argument will be used as the filename. Otherwise, the client must set the filename in the `Content-Disposition` HTTP header (e.g., `Content-Disposition: attachment; filename=upload.jpg`).
+
+#### Attributes
+
+<ParamField path="media_type" type="str" default="'*/*'">
+  Matches any content type
+</ParamField>
+
+<ParamField path="errors" type="dict">
+  Error messages dictionary with keys:
+  - `'unhandled'` - None of the upload handlers can handle the stream
+  - `'no_filename'` - Missing filename in Content-Disposition header
+</ParamField>
+
+<Warning>
+- The `FileUploadParser` is for usage with native clients that can upload the file as a raw data request. For web-based uploads, or for native clients with multipart upload support, use `MultiPartParser` instead.
+- Since this parser's `media_type` matches any content type, `FileUploadParser` should generally be the only parser set on an API view.
+- `FileUploadParser` respects Django's standard `FILE_UPLOAD_HANDLERS` setting and the `request.upload_handlers` attribute.
+</Warning>
+
+#### Example
+
+```python
+# views.py
+from rest_framework.parsers import FileUploadParser
+from rest_framework.views import APIView
+
+class FileUploadView(APIView):
+    parser_classes = [FileUploadParser]
+
+    def put(self, request, filename, format=None):
+        file_obj = request.FILES['file']
+        # Process the uploaded file
+        return Response(status=204)
+
+# urls.py
+from django.urls import re_path
+
+urlpatterns = [
+    re_path(r'^upload/(?P<filename>[^/]+)$', FileUploadView.as_view()),
+]
+```
+
+---
+
+## Custom Parsers
+
+To implement a custom parser, you should override `BaseParser`, set the `.media_type` property, and implement the `.parse(self, stream, media_type, parser_context)` method.
+
+The method should return the data that will be used to populate the `request.data` property.
+
+### Arguments
+
+<ParamField path="stream" type="stream">
+  A stream-like object representing the body of the request
+</ParamField>
+
+<ParamField path="media_type" type="str">
+  Optional. If provided, this is the media type of the incoming request content. Depending on the request's `Content-Type:` header, this may be more specific than the renderer's `media_type` attribute, and may include media type parameters (e.g., `"text/plain; charset=utf-8"`).
+</ParamField>
+
+<ParamField path="parser_context" type="dict">
+  Optional. If supplied, this argument will be a dictionary containing any additional context that may be required to parse the request content. By default this will include the following keys: `view`, `request`, `args`, `kwargs`.
+</ParamField>
+
+### Example
+
+The following is an example plaintext parser that will populate the `request.data` property with a string representing the body of the request:
+
+```python
+from rest_framework.parsers import BaseParser
+
+class PlainTextParser(BaseParser):
+    """
+    Plain text parser.
+    """
+    media_type = 'text/plain'
+
+    def parse(self, stream, media_type=None, parser_context=None):
+        """
+        Simply return a string representing the body of the request.
+        """
+        return stream.read()
+```
+
+### Using custom parsers
+
+```python
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class PlainTextView(APIView):
+    parser_classes = [PlainTextParser]
+    
+    def post(self, request):
+        # request.data contains the plain text string
+        return Response({'text_length': len(request.data)})
+```
+
+---
+
+## Third-party Parsers
+
+### YAML
+
+[REST framework YAML](https://jpadilla.github.io/django-rest-framework-yaml/) provides YAML parsing and rendering support.
+
+```bash
+pip install djangorestframework-yaml
+```
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework_yaml.parsers.YAMLParser',
+    ],
+}
+```
+
+### XML
+
+[REST Framework XML](https://jpadilla.github.io/django-rest-framework-xml/) provides a simple informal XML format.
+
+```bash
+pip install djangorestframework-xml
+```
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework_xml.parsers.XMLParser',
+    ],
+}
+```
+
+### MessagePack
+
+[MessagePack](https://github.com/juanriaza/django-rest-framework-msgpack) is a fast, efficient binary serialization format. The [djangorestframework-msgpack](https://github.com/juanriaza/django-rest-framework-msgpack) package provides MessagePack parser and renderer support.
+
+### CamelCase JSON
+
+[djangorestframework-camel-case](https://github.com/vbabiy/djangorestframework-camel-case) provides camel case JSON renderers and parsers. This allows serializers to use Python-style underscored field names, but be exposed in the API as Javascript-style camel case field names.

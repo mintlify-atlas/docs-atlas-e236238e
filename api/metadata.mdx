@@ -1,0 +1,225 @@
+---
+title: Metadata
+description: API reference for Django REST Framework metadata classes
+---
+
+Metadata classes determine what information is returned in response to `OPTIONS` requests.
+
+## BaseMetadata
+
+Base class for all metadata implementations.
+
+```python
+from rest_framework.metadata import BaseMetadata
+```
+
+### Methods
+
+#### `determine_metadata(request, view)`
+
+Return a dictionary of metadata about the view. Used to return responses for `OPTIONS` requests.
+
+<ParamField path="request" type="Request" required>
+  The request instance
+</ParamField>
+
+<ParamField path="view" type="APIView" required>
+  The view instance
+</ParamField>
+
+Returns a dictionary of metadata.
+
+---
+
+## SimpleMetadata
+
+The default metadata implementation that returns an ad-hoc set of information about the view.
+
+```python
+from rest_framework.metadata import SimpleMetadata
+
+class MyView(APIView):
+    metadata_class = SimpleMetadata
+```
+
+### Response Format
+
+The `OPTIONS` response includes:
+
+```json
+{
+    "name": "User List",
+    "description": "List of all users in the system",
+    "renders": [
+        "application/json",
+        "text/html"
+    ],
+    "parses": [
+        "application/json",
+        "application/x-www-form-urlencoded",
+        "multipart/form-data"
+    ],
+    "actions": {
+        "POST": {
+            "username": {
+                "type": "string",
+                "required": true,
+                "read_only": false,
+                "label": "Username",
+                "max_length": 100
+            },
+            "email": {
+                "type": "email",
+                "required": true,
+                "read_only": false,
+                "label": "Email address"
+            }
+        }
+    }
+}
+```
+
+### Attributes
+
+<ParamField path="label_lookup" type="ClassLookupDict">
+  Mapping of serializer field types to string labels. Used to determine the `type` value in field metadata
+</ParamField>
+
+### Methods
+
+#### `determine_metadata(request, view)`
+
+Return metadata including:
+- `name` - View name from `view.get_view_name()`
+- `description` - View description from `view.get_view_description()`
+- `renders` - List of media types the view can render
+- `parses` - List of media types the view can parse
+- `actions` - Field information for POST/PUT methods (if view has a serializer)
+
+#### `determine_actions(request, view)`
+
+Return field information for PUT and POST methods.
+
+<ParamField path="request" type="Request" required>
+  The request instance
+</ParamField>
+
+<ParamField path="view" type="APIView" required>
+  The view instance
+</ParamField>
+
+Returns a dictionary with method names as keys and field info as values.
+
+#### `get_serializer_info(serializer)`
+
+Return a dictionary of metadata about the serializer's fields.
+
+<ParamField path="serializer" type="Serializer" required>
+  The serializer instance
+</ParamField>
+
+Returns a dictionary mapping field names to field information.
+
+#### `get_field_info(field)`
+
+Return metadata for a single serializer field.
+
+<ParamField path="field" type="Field" required>
+  The serializer field instance
+</ParamField>
+
+Returns a dictionary with field information:
+- `type` - Field type string
+- `required` - Whether the field is required
+- `read_only` - Whether the field is read-only
+- `label` - Human-readable label
+- `help_text` - Help text for the field
+- `min_length`, `max_length` - Length constraints (if applicable)
+- `min_value`, `max_value` - Value constraints (if applicable)
+- `choices` - Available choices (if applicable)
+
+---
+
+## Example: Custom Metadata
+
+### Add Custom Fields
+
+```python
+from rest_framework.metadata import SimpleMetadata
+
+class CustomMetadata(SimpleMetadata):
+    def determine_metadata(self, request, view):
+        metadata = super().determine_metadata(request, view)
+        # Add custom fields
+        metadata['custom_field'] = 'custom_value'
+        metadata['api_version'] = '1.0.0'
+        return metadata
+
+class MyView(APIView):
+    metadata_class = CustomMetadata
+```
+
+### Global Configuration
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_METADATA_CLASS': 'myapp.metadata.CustomMetadata',
+}
+```
+
+### Minimal Metadata
+
+```python
+from rest_framework.metadata import BaseMetadata
+
+class MinimalMetadata(BaseMetadata):
+    def determine_metadata(self, request, view):
+        return {
+            'name': view.get_view_name(),
+        }
+```
+
+### Testing OPTIONS Requests
+
+```python
+from rest_framework.test import APIClient
+
+client = APIClient()
+response = client.options('/api/users/')
+print(response.data)
+# {
+#     'name': 'User List',
+#     'description': '...',
+#     'renders': [...],
+#     'parses': [...],
+#     'actions': {...}
+# }
+```
+
+---
+
+## Field Type Labels
+
+The default `label_lookup` maps serializer fields to type labels:
+
+| Serializer Field | Type Label |
+|-----------------|------------|
+| `Field` | `'field'` |
+| `BooleanField` | `'boolean'` |
+| `CharField` | `'string'` |
+| `EmailField` | `'email'` |
+| `URLField` | `'url'` |
+| `IntegerField` | `'integer'` |
+| `FloatField` | `'float'` |
+| `DecimalField` | `'decimal'` |
+| `DateField` | `'date'` |
+| `DateTimeField` | `'datetime'` |
+| `TimeField` | `'time'` |
+| `ChoiceField` | `'choice'` |
+| `MultipleChoiceField` | `'multiple choice'` |
+| `FileField` | `'file upload'` |
+| `ImageField` | `'image upload'` |
+| `ListField` | `'list'` |
+| `DictField` | `'nested object'` |
+| `Serializer` | `'nested object'` |

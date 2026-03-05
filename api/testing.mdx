@@ -1,0 +1,473 @@
+---
+title: Testing
+description: API reference for Django REST Framework testing utilities
+---
+
+DRF provides testing utilities that extend Django's test framework for API testing.
+
+## APIRequestFactory
+
+Factory for creating test requests with DRF-specific features.
+
+```python
+from rest_framework.test import APIRequestFactory
+
+factory = APIRequestFactory()
+request = factory.post('/notes/', {'title': 'new idea'})
+```
+
+### Constructor
+
+<ParamField path="enforce_csrf_checks" type="bool">
+  Enable CSRF validation. Default is `False`
+</ParamField>
+
+<ParamField path="**defaults" type="dict">
+  Default values for all requests (e.g., headers)
+</ParamField>
+
+### Methods
+
+#### `get(path, data=None, **extra)`
+
+Create a GET request.
+
+```python
+request = factory.get('/users/', {'search': 'john'})
+```
+
+#### `post(path, data=None, format=None, content_type=None, **extra)`
+
+Create a POST request.
+
+```python
+# JSON request
+request = factory.post('/users/', {'username': 'john'}, format='json')
+
+# Form request
+request = factory.post('/users/', {'username': 'john'}, format='multipart')
+```
+
+#### `put(path, data=None, format=None, content_type=None, **extra)`
+
+Create a PUT request.
+
+#### `patch(path, data=None, format=None, content_type=None, **extra)`
+
+Create a PATCH request.
+
+#### `delete(path, data=None, format=None, content_type=None, **extra)`
+
+Create a DELETE request.
+
+#### `options(path, data=None, format=None, content_type=None, **extra)`
+
+Create an OPTIONS request.
+
+### Request Formats
+
+The `format` parameter determines the content type:
+
+<ParamField path="json" type="str">
+  Encode data as JSON (`application/json`)
+</ParamField>
+
+<ParamField path="multipart" type="str">
+  Encode as multipart form data (default)
+</ParamField>
+
+### Example
+
+```python
+from rest_framework.test import APIRequestFactory
+from myapp.views import UserDetail
+
+factory = APIRequestFactory()
+view = UserDetail.as_view()
+
+# Create request
+request = factory.get('/users/1/')
+response = view(request, pk=1)
+
+assert response.status_code == 200
+```
+
+---
+
+## APIClient
+
+Client for making test requests that includes authentication and session support.
+
+```python
+from rest_framework.test import APIClient
+
+client = APIClient()
+response = client.post('/notes/', {'title': 'new idea'}, format='json')
+```
+
+### Constructor
+
+<ParamField path="enforce_csrf_checks" type="bool">
+  Enable CSRF validation. Default is `False`
+</ParamField>
+
+<ParamField path="**defaults" type="dict">
+  Default values for all requests
+</ParamField>
+
+### Methods
+
+#### `credentials(**kwargs)`
+
+Set headers for all requests.
+
+```python
+client = APIClient()
+client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
+```
+
+#### `force_authenticate(user=None, token=None)`
+
+Forcibly authenticate requests.
+
+```python
+from django.contrib.auth.models import User
+
+user = User.objects.get(username='john')
+client = APIClient()
+client.force_authenticate(user=user)
+response = client.get('/api/users/me/')
+```
+
+<ParamField path="user" type="User">
+  User instance to authenticate as
+</ParamField>
+
+<ParamField path="token" type="Token">
+  Token instance for token authentication
+</ParamField>
+
+#### `login(**credentials)`
+
+Login using Django's session authentication.
+
+```python
+client = APIClient()
+client.login(username='john', password='password123')
+```
+
+#### `logout()`
+
+Logout and clear credentials.
+
+```python
+client.logout()
+```
+
+### Request Methods
+
+All standard HTTP methods are available:
+
+```python
+client.get(path, data=None, follow=False, **extra)
+client.post(path, data=None, format=None, content_type=None, follow=False, **extra)
+client.put(path, data=None, format=None, content_type=None, follow=False, **extra)
+client.patch(path, data=None, format=None, content_type=None, follow=False, **extra)
+client.delete(path, data=None, format=None, content_type=None, follow=False, **extra)
+client.options(path, data=None, format=None, content_type=None, follow=False, **extra)
+```
+
+### Example
+
+```python
+from rest_framework.test import APIClient
+from rest_framework import status
+
+client = APIClient()
+
+# Test list endpoint
+response = client.get('/api/users/')
+assert response.status_code == status.HTTP_200_OK
+assert len(response.data) > 0
+
+# Test create endpoint
+response = client.post('/api/users/', {
+    'username': 'john',
+    'email': 'john@example.com'
+}, format='json')
+assert response.status_code == status.HTTP_201_CREATED
+assert response.data['username'] == 'john'
+```
+
+---
+
+## force_authenticate
+
+Function to forcibly authenticate a request.
+
+```python
+from rest_framework.test import force_authenticate, APIRequestFactory
+
+factory = APIRequestFactory()
+user = User.objects.get(username='john')
+view = MyView.as_view()
+
+request = factory.get('/api/users/me/')
+force_authenticate(request, user=user)
+response = view(request)
+```
+
+### Signature
+
+```python
+force_authenticate(request, user=None, token=None)
+```
+
+<ParamField path="request" type="Request" required>
+  The request to authenticate
+</ParamField>
+
+<ParamField path="user" type="User">
+  User instance
+</ParamField>
+
+<ParamField path="token" type="Token">
+  Token instance
+</ParamField>
+
+---
+
+## Test Case Classes
+
+DRF provides test case classes that use `APIClient` by default.
+
+### APITestCase
+
+Extends Django's `TestCase`.
+
+```python
+from rest_framework.test import APITestCase
+from rest_framework import status
+
+class UserTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='john',
+            password='password123'
+        )
+    
+    def test_create_user(self):
+        url = '/api/users/'
+        data = {'username': 'jane', 'email': 'jane@example.com'}
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(User.objects.count(), 2)
+    
+    def test_get_user(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(f'/api/users/{self.user.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], 'john')
+```
+
+### APITransactionTestCase
+
+Extends Django's `TransactionTestCase`.
+
+```python
+from rest_framework.test import APITransactionTestCase
+
+class MyTransactionTests(APITransactionTestCase):
+    def test_something(self):
+        response = self.client.get('/api/users/')
+        self.assertEqual(response.status_code, 200)
+```
+
+### APISimpleTestCase
+
+Extends Django's `SimpleTestCase` (no database access).
+
+```python
+from rest_framework.test import APISimpleTestCase
+
+class MySimpleTests(APISimpleTestCase):
+    def test_url_resolution(self):
+        # Test URL patterns without database
+        pass
+```
+
+### APILiveServerTestCase
+
+Extends Django's `LiveServerTestCase`.
+
+```python
+from rest_framework.test import APILiveServerTestCase
+
+class MyLiveServerTests(APILiveServerTestCase):
+    def test_something(self):
+        response = self.client.get(f'{self.live_server_url}/api/users/')
+        self.assertEqual(response.status_code, 200)
+```
+
+---
+
+## RequestsClient
+
+Test client using the `requests` library.
+
+```python
+from rest_framework.test import RequestsClient
+
+client = RequestsClient()
+response = client.get('http://testserver/api/users/')
+assert response.status_code == 200
+```
+
+Requires the `requests` library to be installed.
+
+---
+
+## CoreAPIClient
+
+Test client for CoreAPI.
+
+```python
+from rest_framework.test import CoreAPIClient
+
+client = CoreAPIClient()
+schema = client.get('http://testserver/schema/')
+```
+
+Requires the `coreapi` library to be installed.
+
+---
+
+## URLPatternsTestCase
+
+Isolate URL patterns for specific test cases.
+
+```python
+from rest_framework.test import URLPatternsTestCase, APITestCase
+from django.urls import path
+
+class MyTestCase(URLPatternsTestCase, APITestCase):
+    urlpatterns = [
+        path('api/users/', user_list),
+        path('api/users/<int:pk>/', user_detail),
+    ]
+    
+    def test_user_list(self):
+        response = self.client.get('/api/users/')
+        self.assertEqual(response.status_code, 200)
+```
+
+---
+
+## Testing Configuration
+
+### Settings
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'TEST_REQUEST_DEFAULT_FORMAT': 'json',  # Default: 'multipart'
+    'TEST_REQUEST_RENDERER_CLASSES': [
+        'rest_framework.renderers.MultiPartRenderer',
+        'rest_framework.renderers.JSONRenderer',
+    ],
+}
+```
+
+<ParamField path="TEST_REQUEST_DEFAULT_FORMAT" type="str">
+  Default format for test requests. Default is `'multipart'`
+</ParamField>
+
+<ParamField path="TEST_REQUEST_RENDERER_CLASSES" type="list">
+  Available renderer classes for test requests
+</ParamField>
+
+---
+
+## Complete Example
+
+```python
+from django.contrib.auth.models import User
+from rest_framework.test import APITestCase, APIClient
+from rest_framework import status
+from myapp.models import Post
+
+class PostTests(APITestCase):
+    def setUp(self):
+        # Create test user
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123'
+        )
+        
+        # Create test post
+        self.post = Post.objects.create(
+            title='Test Post',
+            content='Test content',
+            author=self.user
+        )
+        
+        # Setup client
+        self.client = APIClient()
+    
+    def test_get_post_list(self):
+        """Test retrieving list of posts"""
+        response = self.client.get('/api/posts/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+    
+    def test_get_post_detail(self):
+        """Test retrieving a single post"""
+        response = self.client.get(f'/api/posts/{self.post.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['title'], 'Test Post')
+    
+    def test_create_post_authenticated(self):
+        """Test creating post as authenticated user"""
+        self.client.force_authenticate(user=self.user)
+        data = {
+            'title': 'New Post',
+            'content': 'New content'
+        }
+        response = self.client.post('/api/posts/', data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Post.objects.count(), 2)
+        self.assertEqual(response.data['title'], 'New Post')
+    
+    def test_create_post_unauthenticated(self):
+        """Test creating post as unauthenticated user fails"""
+        data = {
+            'title': 'New Post',
+            'content': 'New content'
+        }
+        response = self.client.post('/api/posts/', data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_update_post(self):
+        """Test updating a post"""
+        self.client.force_authenticate(user=self.user)
+        data = {'title': 'Updated Title'}
+        response = self.client.patch(
+            f'/api/posts/{self.post.id}/',
+            data,
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.post.refresh_from_db()
+        self.assertEqual(self.post.title, 'Updated Title')
+    
+    def test_delete_post(self):
+        """Test deleting a post"""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.delete(f'/api/posts/{self.post.id}/')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Post.objects.count(), 0)
+    
+    def tearDown(self):
+        # Clean up
+        self.client.logout()
+```

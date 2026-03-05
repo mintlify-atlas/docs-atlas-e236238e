@@ -1,0 +1,741 @@
+---
+title: "Serialization"
+description: "Deep dive into Django REST Framework's serialization system"
+---
+
+## What is Serialization?
+
+Serialization in DRF is a **two-phase process** that bridges the gap between complex Python objects and simple data types:
+
+```python
+# From rest_framework/serializers.py:6-11
+"""
+Serialization in REST framework is a two-phase process:
+
+1. Serializers marshal between complex types like model instances, and
+   python primitives.
+2. The process of marshaling between python primitives and request and
+   response content is handled by parsers and renderers.
+"""
+```
+
+### The Two Phases
+
+**Phase 1: Python Objects ↔ Python Primitives** (Serializers)
+```python
+Model instance → dict/list → Model instance
+```
+
+**Phase 2: Python Primitives ↔ Wire Format** (Parsers/Renderers)
+```python
+dict/list → JSON/XML/etc → dict/list
+```
+
+<Info>
+  This separation allows serializers to work independently of the representation format. The same serializer can output JSON, XML, or any other format.
+</Info>
+
+## Serializer Classes
+
+### BaseSerializer
+
+The foundation of all serializers. It enforces strict usage patterns:
+
+```python
+# From rest_framework/serializers.py:89-112
+class BaseSerializer(Field):
+    """
+    If a `data=` argument is passed then:
+    
+    .is_valid() - Available.
+    .initial_data - Available.
+    .validated_data - Only available after calling `is_valid()`
+    .errors - Only available after calling `is_valid()`
+    .data - Only available after calling `is_valid()`
+    
+    If a `data=` argument is not passed then:
+    
+    .is_valid() - Not available.
+    .initial_data - Not available.
+    .validated_data - Not available.
+    .errors - Not available.
+    .data - Available.
+    """
+```
+
+### Why This Matters
+
+The serializer's interface changes based on usage mode:
+
+<CodeGroup>
+```python Deserialization (Input)
+# When you pass data= you're deserializing (validating input)
+serializer = ArticleSerializer(data=request.data)
+if serializer.is_valid():
+    article = serializer.save()  # Create from validated data
+    return Response(serializer.data)
+return Response(serializer.errors, status=400)
+```
+
+```python Serialization (Output)
+# When you pass instance= you're serializing (generating output)
+article = Article.objects.get(pk=1)
+serializer = ArticleSerializer(article)
+return Response(serializer.data)  # .data is immediately available
+```
+
+```python Update (Both)
+# Pass both for updates
+article = Article.objects.get(pk=1)
+serializer = ArticleSerializer(article, data=request.data)
+if serializer.is_valid():
+    article = serializer.save()  # Update existing instance
+```
+</CodeGroup>
+
+<Warning>
+  Accessing `.data` before calling `.is_valid()` when you passed `data=` raises an AssertionError. This prevents you from accidentally returning unvalidated data.
+</Warning>
+
+## The Serialization Process
+
+### to_representation(): Objects → Primitives
+
+This method converts Python objects to native datatypes:
+
+```python
+# From rest_framework/serializers.py:530-554
+def to_representation(self, instance):
+    """
+    Object instance -> Dict of primitive datatypes.
+    """
+    ret = {}
+    fields = self._readable_fields
+    
+    for field in fields:
+        try:
+            attribute = field.get_attribute(instance)
+        except SkipField:
+            continue
+        
+        # Skip `to_representation` for `None` values
+        if attribute is None:
+            ret[field.field_name] = None
+        else:
+            ret[field.field_name] = field.to_representation(attribute)
+    
+    return ret
+```
+
+#### How It Works
+
+1. **Get the attribute** from the instance (handles nested lookups)
+2. **Convert to primitive** using the field's `to_representation()`
+3. **Handle special cases** (None values, PKOnlyObject, etc.)
+
+### Example Flow
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    author = serializers.StringRelatedField()
+    
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'author', 'created']
+
+# Serialize an article
+article = Article.objects.get(pk=1)
+serializer = ArticleSerializer(article)
+
+# to_representation() is called when accessing .data
+data = serializer.data
+# Result:
+# {
+#     'id': 1,
+#     'title': 'DRF Architecture',
+#     'author': 'John Doe',  # String representation
+#     'created': '2024-03-05T10:30:00Z'  # ISO format
+# }
+```
+
+## The Deserialization Process
+
+### to_internal_value(): Primitives → Python
+
+This method validates and converts input data:
+
+```python
+# From rest_framework/serializers.py:493-528
+def to_internal_value(self, data):
+    """
+    Dict of native values <- Dict of primitive datatypes.
+    """
+    if not isinstance(data, Mapping):
+        raise ValidationError({
+            api_settings.NON_FIELD_ERRORS_KEY: ['Invalid data type']
+        })
+    
+    ret = {}
+    errors = {}
+    fields = self._writable_fields
+    
+    for field in fields:
+        validate_method = getattr(self, 'validate_' + field.field_name, None)
+        primitive_value = field.get_value(data)
+        
+        try:
+            # Field-level validation
+            validated_value = field.run_validation(primitive_value)
+            # Custom field validation
+            if validate_method is not None:
+                validated_value = validate_method(validated_value)
+        except ValidationError as exc:
+            errors[field.field_name] = exc.detail
+        else:
+            self.set_value(ret, field.source_attrs, validated_value)
+    
+    if errors:
+        raise ValidationError(errors)
+    
+    return ret
+```
+
+### Validation Layers
+
+DRF provides three levels of validation:
+
+#### 1. Field-Level Validation
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    def validate_title(self, value):
+        """
+        Called for the 'title' field.
+        Method name: validate_<field_name>
+        """
+        if len(value) < 5:
+            raise serializers.ValidationError(
+                "Title must be at least 5 characters"
+            )
+        return value
+```
+
+#### 2. Object-Level Validation
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        """
+        Called with all fields after field-level validation.
+        Useful for validation that requires multiple fields.
+        """
+        if attrs['publish_date'] < attrs['created']:
+            raise serializers.ValidationError(
+                "Publish date cannot be before creation date"
+            )
+        return attrs
+```
+
+#### 3. Validator Classes
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Article
+        fields = ['title', 'author', 'category']
+        validators = [
+            UniqueTogetherValidator(
+                queryset=Article.objects.all(),
+                fields=['title', 'author']
+            )
+        ]
+```
+
+### The Complete Validation Flow
+
+```python
+# From rest_framework/serializers.py:446-464
+def run_validation(self, data=empty):
+    """
+    We override the default `run_validation`, because the validation
+    performed by validators and the `.validate()` method should
+    be coerced into an error dictionary.
+    """
+    (is_empty_value, data) = self.validate_empty_values(data)
+    if is_empty_value:
+        return data
+    
+    value = self.to_internal_value(data)  # 1. Field-level validation
+    try:
+        self.run_validators(value)         # 2. Validator classes
+        value = self.validate(value)       # 3. Object-level validation
+        assert value is not None, '.validate() should return the validated data'
+    except (ValidationError, DjangoValidationError) as exc:
+        raise ValidationError(detail=as_serializer_error(exc))
+    
+    return value
+```
+
+<Info>
+  Validation happens in `is_valid()`, which calls `run_validation()` internally.
+</Info>
+
+## Saving Instances
+
+The `.save()` method orchestrates create/update operations:
+
+```python
+# From rest_framework/serializers.py:177-215
+def save(self, **kwargs):
+    assert hasattr(self, '_errors'), (
+        'You must call `.is_valid()` before calling `.save()`.'
+    )
+    
+    assert not self.errors, (
+        'You cannot call `.save()` on a serializer with invalid data.'
+    )
+    
+    validated_data = {**self.validated_data, **kwargs}
+    
+    if self.instance is not None:
+        self.instance = self.update(self.instance, validated_data)
+        assert self.instance is not None, (
+            '`update()` did not return an object instance.'
+        )
+    else:
+        self.instance = self.create(validated_data)
+        assert self.instance is not None, (
+            '`create()` did not return an object instance.'
+        )
+    
+    return self.instance
+```
+
+### The save() Contract
+
+<Note>
+  `.save()` determines whether to create or update based on whether `instance` was passed to the serializer. You implement `create()` and `update()` methods.
+</Note>
+
+#### Creating Objects
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        """
+        Called by .save() when no instance was provided.
+        """
+        return Article.objects.create(**validated_data)
+
+# Usage
+serializer = ArticleSerializer(data=request.data)
+if serializer.is_valid():
+    article = serializer.save()  # Calls create()
+```
+
+#### Updating Objects
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    def update(self, instance, validated_data):
+        """
+        Called by .save() when an instance was provided.
+        """
+        instance.title = validated_data.get('title', instance.title)
+        instance.content = validated_data.get('content', instance.content)
+        instance.save()
+        return instance
+
+# Usage
+article = Article.objects.get(pk=1)
+serializer = ArticleSerializer(article, data=request.data)
+if serializer.is_valid():
+    article = serializer.save()  # Calls update()
+```
+
+#### Passing Additional Data to save()
+
+```python
+# Pass extra data that isn't in the request
+serializer.save(author=request.user, ip_address=request.META['REMOTE_ADDR'])
+
+# This data is merged with validated_data:
+validated_data = {**self.validated_data, **kwargs}
+```
+
+## ModelSerializer Magic
+
+ModelSerializer automatically generates fields from Django models:
+
+```python
+# From rest_framework/serializers.py:910-925
+class ModelSerializer(Serializer):
+    """
+    A `ModelSerializer` is just a regular `Serializer`, except that:
+    
+    * A set of default fields are automatically populated.
+    * A set of default validators are automatically populated.
+    * Default `.create()` and `.update()` implementations are provided.
+    """
+```
+
+### Field Generation
+
+DRF uses a mapping to convert Django fields to serializer fields:
+
+```python
+# Partial mapping from rest_framework/serializers.py:926-954
+serializer_field_mapping = {
+    models.CharField: CharField,
+    models.EmailField: EmailField,
+    models.DateTimeField: DateTimeField,
+    models.IntegerField: IntegerField,
+    models.BooleanField: BooleanField,
+    # ... many more
+}
+```
+
+### How get_fields() Works
+
+```python
+# From rest_framework/serializers.py:1068-1147 (simplified)
+def get_fields(self):
+    """
+    Return the dict of field names -> field instances.
+    """
+    declared_fields = copy.deepcopy(self._declared_fields)
+    model = getattr(self.Meta, 'model')
+    
+    # Get metadata about the model
+    info = model_meta.get_field_info(model)
+    field_names = self.get_field_names(declared_fields, info)
+    
+    fields = {}
+    for field_name in field_names:
+        # Use explicitly declared fields
+        if field_name in declared_fields:
+            fields[field_name] = declared_fields[field_name]
+            continue
+        
+        # Otherwise, build field from model
+        field_class, field_kwargs = self.build_field(
+            field_name, info, model, depth
+        )
+        fields[field_name] = field_class(**field_kwargs)
+    
+    return fields
+```
+
+### Example: Automatic Field Generation
+
+```python
+# Django model
+class Article(models.Model):
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    created = models.DateTimeField(auto_now_add=True)
+    published = models.BooleanField(default=False)
+
+# ModelSerializer
+class ArticleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Article
+        fields = '__all__'
+
+# Generates these fields automatically:
+# - id: IntegerField(read_only=True)
+# - title: CharField(max_length=200)
+# - content: CharField(style={'base_template': 'textarea.html'})
+# - author: PrimaryKeyRelatedField(queryset=User.objects.all())
+# - created: DateTimeField(read_only=True)
+# - published: BooleanField(required=False)
+```
+
+## Nested Serializers
+
+Serializers can be nested to represent related objects:
+
+```python
+class AuthorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email']
+
+class ArticleSerializer(serializers.ModelSerializer):
+    author = AuthorSerializer(read_only=True)
+    
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'author', 'created']
+
+# Output:
+# {
+#     'id': 1,
+#     'title': 'DRF Architecture',
+#     'author': {
+#         'id': 42,
+#         'username': 'john',
+#         'email': 'john@example.com'
+#     },
+#     'created': '2024-03-05T10:30:00Z'
+# }
+```
+
+### Writable Nested Serializers
+
+By default, nested serializers are read-only. For writable nested data, you must override `create()` or `update()`:
+
+```python
+# From rest_framework/serializers.py:828-851
+def raise_errors_on_nested_writes(method_name, serializer, validated_data):
+    """
+    Writable nested relationships and dotted-source fields are intentionally
+    unsupported by default due to ambiguous persistence semantics.
+    
+    Developers must either:
+    - Override the `.create()` / `.update()` methods explicitly, or
+    - Mark nested serializers as `read_only=True`
+    """
+```
+
+<Warning>
+  Attempting to save nested data without overriding `create()`/`update()` will raise an assertion error. This is intentional - DRF doesn't know whether to create, update, or ignore nested objects.
+</Warning>
+
+#### Handling Nested Writes
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    author = AuthorSerializer()
+    
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'author']
+    
+    def create(self, validated_data):
+        # Extract nested data
+        author_data = validated_data.pop('author')
+        
+        # Create or get author
+        author, created = User.objects.get_or_create(
+            username=author_data['username'],
+            defaults=author_data
+        )
+        
+        # Create article with author
+        article = Article.objects.create(author=author, **validated_data)
+        return article
+```
+
+## Many=True: ListSerializer
+
+When you pass `many=True`, DRF creates a ListSerializer:
+
+```python
+# From rest_framework/serializers.py:123-128
+def __new__(cls, *args, **kwargs):
+    # Override to automatically create `ListSerializer` when `many=True`
+    if kwargs.pop('many', False):
+        return cls.many_init(*args, **kwargs)
+    return super().__new__(cls, *args, **kwargs)
+```
+
+### ListSerializer Behavior
+
+```python
+# Serialize multiple objects
+articles = Article.objects.all()
+serializer = ArticleSerializer(articles, many=True)
+data = serializer.data  # Returns a list of dicts
+
+# Deserialize multiple objects
+data = [
+    {'title': 'Article 1', 'content': '...'},
+    {'title': 'Article 2', 'content': '...'},
+]
+serializer = ArticleSerializer(data=data, many=True)
+if serializer.is_valid():
+    articles = serializer.save()  # Creates multiple articles
+```
+
+### ListSerializer Methods
+
+```python
+# From rest_framework/serializers.py:719-729
+def to_representation(self, data):
+    """
+    List of object instances -> List of dicts of primitive datatypes.
+    """
+    iterable = data.all() if isinstance(data, models.manager.BaseManager) else data
+    return [
+        self.child.to_representation(item) for item in iterable
+    ]
+```
+
+## SerializerMethodField
+
+For computed fields, use SerializerMethodField:
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    days_since_created = serializers.SerializerMethodField()
+    author_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'days_since_created', 'author_name']
+    
+    def get_days_since_created(self, obj):
+        """Method name: get_<field_name>"""
+        delta = timezone.now() - obj.created
+        return delta.days
+    
+    def get_author_name(self, obj):
+        return obj.author.get_full_name()
+```
+
+<Info>
+  SerializerMethodField is always read-only. It's perfect for computed or aggregated values.
+</Info>
+
+## Validation Error Format
+
+DRF standardizes validation errors:
+
+```python
+# From rest_framework/serializers.py:314-349
+def as_serializer_error(exc):
+    """
+    Coerce validation exceptions into a standardized serialized error format.
+    
+    The returned structure conforms to:
+    - Field-specific errors: '{field-name: [errors]}'
+    - Non-field errors: under the 'NON_FIELD_ERRORS_KEY'
+    """
+```
+
+### Error Response Examples
+
+<CodeGroup>
+```json Field Errors
+{
+    "title": ["This field is required."],
+    "email": ["Enter a valid email address."]
+}
+```
+
+```json Non-Field Errors
+{
+    "non_field_errors": [
+        "The fields title and author must make a unique set."
+    ]
+}
+```
+
+```json Mixed Errors
+{
+    "title": ["Title must be at least 5 characters."],
+    "non_field_errors": ["Publish date cannot be before creation date."]
+}
+```
+</CodeGroup>
+
+## Performance Considerations
+
+### 1. Select and Prefetch Related
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    serializer_class = ArticleSerializer
+    
+    def get_queryset(self):
+        # Prevent N+1 queries
+        return Article.objects.select_related('author').prefetch_related('tags')
+```
+
+### 2. Read-Only Fields
+
+Mark computed or non-editable fields as read-only:
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'created', 'view_count']
+        read_only_fields = ['created', 'view_count']
+```
+
+### 3. Limit Field Depth
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'author']
+        depth = 1  # Auto-expand one level of relations
+```
+
+<Warning>
+  Using `depth` is convenient but can lead to over-fetching. For production APIs, explicitly define nested serializers for better control.
+</Warning>
+
+## Best Practices
+
+### 1. Keep Serializers Simple
+
+```python
+# Good: One serializer per purpose
+class ArticleListSerializer(serializers.ModelSerializer):
+    """Light serializer for list views"""
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'created']
+
+class ArticleDetailSerializer(serializers.ModelSerializer):
+    """Full serializer for detail views"""
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'content', 'author', 'created', 'updated']
+```
+
+### 2. Use Source for Mapping
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    author_email = serializers.EmailField(source='author.email')
+    is_published = serializers.BooleanField(source='published')
+```
+
+### 3. Validation in the Right Place
+
+```python
+# Business logic validation: in serializer
+class ArticleSerializer(serializers.ModelSerializer):
+    def validate_title(self, value):
+        if 'spam' in value.lower():
+            raise serializers.ValidationError("Title contains spam words")
+        return value
+
+# Data integrity validation: in model
+class Article(models.Model):
+    title = models.CharField(max_length=200)
+    
+    def clean(self):
+        if len(self.title) < 5:
+            raise ValidationError("Title too short")
+```
+
+## Summary
+
+DRF's serialization system:
+
+1. **Separates concerns**: Serializers handle data, parsers/renderers handle formats
+2. **Enforces safety**: Strict usage patterns prevent common mistakes
+3. **Validates at multiple levels**: Field, object, and validator classes
+4. **Automates common cases**: ModelSerializer generates fields from models
+5. **Provides extensibility**: Override methods to customize behavior
+
+<Tip>
+  Master serializers and you've mastered the heart of DRF. Most API development revolves around defining the right serializers for your data.
+</Tip>

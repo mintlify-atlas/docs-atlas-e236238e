@@ -1,0 +1,690 @@
+---
+title: Views
+description: APIView and function-based views API reference
+---
+
+## APIView
+
+The base class for all views in REST framework.
+
+**Signature:** `class APIView(View)`
+
+`APIView` classes differ from regular Django `View` classes in the following ways:
+
+- Requests passed to handler methods are REST framework's `Request` instances, not Django's `HttpRequest`
+- Handler methods may return REST framework's `Response`, instead of Django's `HttpResponse`
+- Any `APIException` exceptions will be caught and mediated into appropriate responses
+- Incoming requests will be authenticated and appropriate permission and/or throttle checks will be run before dispatching to the handler method
+
+### Class Attributes
+
+#### renderer_classes
+
+A list of renderer classes that determine the media types that can be returned.
+
+**Default:** `api_settings.DEFAULT_RENDERER_CLASSES`
+
+```python
+from rest_framework.views import APIView
+from rest_framework.renderers import JSONRenderer
+
+class MyView(APIView):
+    renderer_classes = [JSONRenderer]
+```
+
+#### parser_classes
+
+A list of parser classes that determine which media types this view can accept.
+
+**Default:** `api_settings.DEFAULT_PARSER_CLASSES`
+
+#### authentication_classes
+
+A list of authentication classes that are used to authenticate the request.
+
+**Default:** `api_settings.DEFAULT_AUTHENTICATION_CLASSES`
+
+```python
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.views import APIView
+
+class MyView(APIView):
+    authentication_classes = [TokenAuthentication]
+```
+
+#### throttle_classes
+
+A list of throttle classes that determine the rate limits for requests.
+
+**Default:** `api_settings.DEFAULT_THROTTLE_CLASSES`
+
+#### permission_classes
+
+A list of permission classes that determine whether a request should be permitted.
+
+**Default:** `api_settings.DEFAULT_PERMISSION_CLASSES`
+
+```python
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+
+class MyView(APIView):
+    permission_classes = [IsAuthenticated]
+```
+
+#### content_negotiation_class
+
+The class used for content negotiation.
+
+**Default:** `api_settings.DEFAULT_CONTENT_NEGOTIATION_CLASS`
+
+#### metadata_class
+
+The class used for determining metadata in OPTIONS responses.
+
+**Default:** `api_settings.DEFAULT_METADATA_CLASS`
+
+#### versioning_class
+
+The class used for determining the API version of incoming requests.
+
+**Default:** `api_settings.DEFAULT_VERSIONING_CLASS`
+
+#### schema
+
+The schema for this view, used for automatic schema generation.
+
+**Default:** `DefaultSchema()`
+
+### Class Methods
+
+#### as_view()
+
+**Signature:** `as_view(**initkwargs)`
+
+Returns a callable view that can be used in URL patterns.
+
+<ParamField path="initkwargs" type="dict">
+  Keyword arguments to pass to the view instance.
+</ParamField>
+
+```python
+from django.urls import path
+from myapp.views import MyView
+
+urlpatterns = [
+    path('my-endpoint/', MyView.as_view()),
+]
+```
+
+<Warning>
+If you have a `queryset` attribute, do not evaluate it directly. Use `.all()` or call `.get_queryset()` instead. Direct evaluation will cache the result and reuse it between requests, causing stale data issues.
+</Warning>
+
+### Properties
+
+#### allowed_methods
+
+Returns a list of HTTP methods that this view allows.
+
+**Returns:** `list[str]`
+
+#### default_response_headers
+
+Returns a dictionary of default headers for responses.
+
+**Returns:** `dict`
+
+### Instance Methods
+
+#### dispatch()
+
+**Signature:** `dispatch(request, *args, **kwargs)`
+
+The main entry point for handling requests. Similar to Django's dispatch, but with extra hooks for startup, finalize, and exception handling.
+
+<ParamField path="request" type="HttpRequest" required>
+  The Django HTTP request.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional URL arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Named URL arguments.
+</ParamField>
+
+**Returns:** `HttpResponseBase`
+
+#### initial()
+
+**Signature:** `initial(request, *args, **kwargs)`
+
+Runs anything that needs to occur prior to calling the handler method. Performs content negotiation, authentication, permission checks, and throttling.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional URL arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Named URL arguments.
+</ParamField>
+
+#### initialize_request()
+
+**Signature:** `initialize_request(request, *args, **kwargs)`
+
+Returns the initial `Request` object.
+
+<ParamField path="request" type="HttpRequest" required>
+  The Django HTTP request.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional URL arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Named URL arguments.
+</ParamField>
+
+**Returns:** `Request`
+
+#### finalize_response()
+
+**Signature:** `finalize_response(request, response, *args, **kwargs)`
+
+Returns the final response object, ensuring the correct content type is set.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+<ParamField path="response" type="HttpResponseBase" required>
+  The response to finalize.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional URL arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Named URL arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+#### handle_exception()
+
+**Signature:** `handle_exception(exc)`
+
+Handles any exception that occurs, returning an appropriate `Response` instance or re-raising the error.
+
+<ParamField path="exc" type="Exception" required>
+  The exception to handle.
+</ParamField>
+
+**Returns:** `Response`
+
+```python
+def handle_exception(self, exc):
+    if isinstance(exc, CustomException):
+        return Response({'error': 'Custom error'}, status=400)
+    return super().handle_exception(exc)
+```
+
+#### permission_denied()
+
+**Signature:** `permission_denied(request, message=None, code=None)`
+
+Raises an appropriate exception if the request is not permitted.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+<ParamField path="message" type="str">
+  The error message.
+</ParamField>
+
+<ParamField path="code" type="str">
+  The error code.
+</ParamField>
+
+**Raises:** `NotAuthenticated` or `PermissionDenied`
+
+#### throttled()
+
+**Signature:** `throttled(request, wait)`
+
+Raises a `Throttled` exception if the request is throttled.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+<ParamField path="wait" type="int">
+  The number of seconds to wait before retrying.
+</ParamField>
+
+**Raises:** `Throttled`
+
+### API Policy Methods
+
+These methods instantiate and return the various API policy classes.
+
+#### get_renderers()
+
+**Signature:** `get_renderers()`
+
+Instantiates and returns the list of renderers that this view can use.
+
+**Returns:** `list[BaseRenderer]`
+
+#### get_parsers()
+
+**Signature:** `get_parsers()`
+
+Instantiates and returns the list of parsers that this view can use.
+
+**Returns:** `list[BaseParser]`
+
+#### get_authenticators()
+
+**Signature:** `get_authenticators()`
+
+Instantiates and returns the list of authenticators that this view can use.
+
+**Returns:** `list[BaseAuthentication]`
+
+#### get_permissions()
+
+**Signature:** `get_permissions()`
+
+Instantiates and returns the list of permissions that this view requires.
+
+**Returns:** `list[BasePermission]`
+
+```python
+def get_permissions(self):
+    if self.request.method == 'GET':
+        return [permissions.AllowAny()]
+    return [permissions.IsAuthenticated()]
+```
+
+#### get_throttles()
+
+**Signature:** `get_throttles()`
+
+Instantiates and returns the list of throttles that this view uses.
+
+**Returns:** `list[BaseThrottle]`
+
+#### get_content_negotiator()
+
+**Signature:** `get_content_negotiator()`
+
+Instantiates and returns the content negotiation class to use.
+
+**Returns:** `BaseContentNegotiation`
+
+#### get_exception_handler()
+
+**Signature:** `get_exception_handler()`
+
+Returns the exception handler that this view uses.
+
+**Returns:** `callable`
+
+### Permission & Throttle Checks
+
+#### check_permissions()
+
+**Signature:** `check_permissions(request)`
+
+Checks if the request should be permitted. Raises an appropriate exception if not permitted.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+**Raises:** `PermissionDenied` or `NotAuthenticated`
+
+#### check_object_permissions()
+
+**Signature:** `check_object_permissions(request, obj)`
+
+Checks if the request should be permitted for a given object. Raises an appropriate exception if not permitted.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+<ParamField path="obj" type="object" required>
+  The object to check permissions for.
+</ParamField>
+
+**Raises:** `PermissionDenied`
+
+```python
+def get(self, request, pk=None):
+    obj = self.get_object()
+    self.check_object_permissions(request, obj)
+    # ... rest of handler
+```
+
+#### check_throttles()
+
+**Signature:** `check_throttles(request)`
+
+Checks if the request should be throttled. Raises an appropriate exception if throttled.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+**Raises:** `Throttled`
+
+#### perform_authentication()
+
+**Signature:** `perform_authentication(request)`
+
+Performs authentication on the incoming request.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+<Note>
+If you override this and simply pass, authentication will be performed lazily when `request.user` or `request.auth` is accessed.
+</Note>
+
+### Content Negotiation
+
+#### perform_content_negotiation()
+
+**Signature:** `perform_content_negotiation(request, force=False)`
+
+Determines which renderer and media type to use to render the response.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+<ParamField path="force" type="bool" default="False">
+  If True, returns the first renderer even if negotiation fails.
+</ParamField>
+
+**Returns:** `tuple[BaseRenderer, str]` - A tuple of (renderer, media_type)
+
+### Context Methods
+
+#### get_parser_context()
+
+**Signature:** `get_parser_context(http_request)`
+
+Returns a dict that is passed to `Parser.parse()` as the `parser_context` keyword argument.
+
+<ParamField path="http_request" type="HttpRequest" required>
+  The Django HTTP request.
+</ParamField>
+
+**Returns:** `dict` - Contains `view`, `args`, and `kwargs` keys
+
+#### get_renderer_context()
+
+**Signature:** `get_renderer_context()`
+
+Returns a dict that is passed to `Renderer.render()` as the `renderer_context` keyword argument.
+
+**Returns:** `dict` - Contains `view`, `args`, `kwargs`, and `request` keys
+
+#### get_exception_handler_context()
+
+**Signature:** `get_exception_handler_context()`
+
+Returns a dict that is passed to the exception handler as the `context` argument.
+
+**Returns:** `dict` - Contains `view`, `args`, `kwargs`, and `request` keys
+
+### View Introspection
+
+#### get_view_name()
+
+**Signature:** `get_view_name()`
+
+Returns the view name, as used in OPTIONS responses and in the browsable API.
+
+**Returns:** `str`
+
+#### get_view_description()
+
+**Signature:** `get_view_description(html=False)`
+
+Returns descriptive text for the view, as used in OPTIONS responses and in the browsable API.
+
+<ParamField path="html" type="bool" default="False">
+  If True, returns HTML-formatted description.
+</ParamField>
+
+**Returns:** `str`
+
+### HTTP Method Handlers
+
+#### options()
+
+**Signature:** `options(request, *args, **kwargs)`
+
+Handler method for HTTP OPTIONS requests.
+
+<ParamField path="request" type="Request" required>
+  The REST framework request.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional URL arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Named URL arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+---
+
+## Function-Based Views
+
+### @api_view()
+
+**Signature:** `@api_view(http_method_names=['GET'])`
+
+Decorator that converts a function-based view into an API view that receives `Request` instances and can return `Response` instances.
+
+<ParamField path="http_method_names" type="list[str]" default="['GET']">
+  List of HTTP methods that the view should respond to.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+@api_view(['GET', 'POST'])
+def my_view(request):
+    if request.method == 'POST':
+        return Response({"message": "Created"}, status=201)
+    return Response({"message": "Hello, world!"})}
+```
+
+<Note>
+By default, only GET methods will be accepted. Other methods will respond with "405 Method Not Allowed".
+</Note>
+
+### Policy Decorators
+
+These decorators must come after (below) the `@api_view` decorator.
+
+#### @renderer_classes()
+
+**Signature:** `@renderer_classes(renderer_class_list)`
+
+Sets the renderer classes for the view.
+
+<ParamField path="renderer_class_list" type="list[class]" required>
+  List of renderer classes.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view, renderer_classes
+from rest_framework.renderers import JSONRenderer
+
+@api_view(['GET'])
+@renderer_classes([JSONRenderer])
+def my_view(request):
+    return Response({"message": "Hello"})
+```
+
+#### @parser_classes()
+
+**Signature:** `@parser_classes(parser_class_list)`
+
+Sets the parser classes for the view.
+
+<ParamField path="parser_class_list" type="list[class]" required>
+  List of parser classes.
+</ParamField>
+
+#### @authentication_classes()
+
+**Signature:** `@authentication_classes(authentication_class_list)`
+
+Sets the authentication classes for the view.
+
+<ParamField path="authentication_class_list" type="list[class]" required>
+  List of authentication classes.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view, authentication_classes
+from rest_framework.authentication import TokenAuthentication
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+def my_view(request):
+    return Response({"user": request.user.username})
+```
+
+#### @throttle_classes()
+
+**Signature:** `@throttle_classes(throttle_class_list)`
+
+Sets the throttle classes for the view.
+
+<ParamField path="throttle_class_list" type="list[class]" required>
+  List of throttle classes.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view, throttle_classes
+from rest_framework.throttling import UserRateThrottle
+
+class OncePerDayUserThrottle(UserRateThrottle):
+    rate = '1/day'
+
+@api_view(['GET'])
+@throttle_classes([OncePerDayUserThrottle])
+def my_view(request):
+    return Response({"message": "Hello for today!"})
+```
+
+#### @permission_classes()
+
+**Signature:** `@permission_classes(permission_class_list)`
+
+Sets the permission classes for the view.
+
+<ParamField path="permission_class_list" type="list[class]" required>
+  List of permission classes.
+</ParamField>
+
+```python
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_view(request):
+    return Response({"message": "Authenticated!"})
+```
+
+---
+
+## Utility Functions
+
+### get_view_name()
+
+**Signature:** `get_view_name(view)`
+
+Given a view instance, returns a textual name to represent the view. Used in the browsable API and OPTIONS responses.
+
+<ParamField path="view" type="APIView" required>
+  The view instance.
+</ParamField>
+
+**Returns:** `str`
+
+This function is the default for the `VIEW_NAME_FUNCTION` setting.
+
+### get_view_description()
+
+**Signature:** `get_view_description(view, html=False)`
+
+Given a view instance, returns a textual description to represent the view. Used in the browsable API and OPTIONS responses.
+
+<ParamField path="view" type="APIView" required>
+  The view instance.
+</ParamField>
+
+<ParamField path="html" type="bool" default="False">
+  If True, returns HTML-formatted description.
+</ParamField>
+
+**Returns:** `str`
+
+This function is the default for the `VIEW_DESCRIPTION_FUNCTION` setting.
+
+### exception_handler()
+
+**Signature:** `exception_handler(exc, context)`
+
+Returns the response that should be used for any given exception.
+
+<ParamField path="exc" type="Exception" required>
+  The exception to handle.
+</ParamField>
+
+<ParamField path="context" type="dict" required>
+  Context dict containing view, args, kwargs, and request.
+</ParamField>
+
+**Returns:** `Response | None`
+
+By default, handles `APIException`, Django's `Http404`, and `PermissionDenied` exceptions. Unhandled exceptions return `None`, which causes a 500 error to be raised.
+
+```python
+from rest_framework.views import exception_handler
+
+def custom_exception_handler(exc, context):
+    # Call REST framework's default exception handler first
+    response = exception_handler(exc, context)
+    
+    if response is not None:
+        response.data['status_code'] = response.status_code
+    
+    return response
+```

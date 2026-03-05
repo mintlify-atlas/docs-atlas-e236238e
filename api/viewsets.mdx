@@ -1,0 +1,455 @@
+---
+title: ViewSets
+description: ViewSet classes API reference
+---
+
+## Overview
+
+A `ViewSet` is a type of class-based view that does not provide method handlers such as `.get()` or `.post()`, but instead provides actions such as `.list()` and `.create()`.
+
+Method handlers for a `ViewSet` are bound to actions at the point of finalizing the view using the `.as_view()` method.
+
+Typically, rather than explicitly registering views in a viewset in the urlconf, you'll register the viewset with a router class that automatically determines the urlconf for you.
+
+```python
+from rest_framework import viewsets
+from myapp.models import User
+from myapp.serializers import UserSerializer
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+```
+
+---
+
+## ViewSet
+
+**Signature:** `class ViewSet(ViewSetMixin, APIView)`
+
+The base `ViewSet` class does not provide any actions by default. You must explicitly define the action implementations.
+
+```python
+from rest_framework import viewsets
+from rest_framework.response import Response
+
+class UserViewSet(viewsets.ViewSet):
+    def list(self, request):
+        queryset = User.objects.all()
+        serializer = UserSerializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    def retrieve(self, request, pk=None):
+        queryset = User.objects.all()
+        user = get_object_or_404(queryset, pk=pk)
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
+```
+
+### Class Methods
+
+#### as_view()
+
+**Signature:** `as_view(actions=None, **initkwargs)`
+
+Returns a callable view that binds HTTP methods to actions.
+
+<ParamField path="actions" type="dict" required>
+  Mapping of HTTP methods to action names, e.g., `{'get': 'list', 'post': 'create'}`
+</ParamField>
+
+<ParamField path="initkwargs" type="dict">
+  Keyword arguments to pass to the view instance.
+</ParamField>
+
+```python
+user_list = UserViewSet.as_view({'get': 'list'})
+user_detail = UserViewSet.as_view({'get': 'retrieve'})
+```
+
+<Warning>
+Do not use `.as_view()` with `@action` methods. It bypasses router setup and may ignore action settings like `permission_classes`. Use routers instead.
+</Warning>
+
+#### get_extra_actions()
+
+**Signature:** `get_extra_actions()`
+
+Returns a list of methods marked as extra viewset actions with the `@action` decorator.
+
+**Returns:** `list[function]`
+
+```python
+extra_actions = UserViewSet.get_extra_actions()
+```
+
+### Instance Methods
+
+#### reverse_action()
+
+**Signature:** `reverse_action(url_name, *args, **kwargs)`
+
+Reverses the URL for the given action.
+
+<ParamField path="url_name" type="str" required>
+  The name of the action to reverse.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional URL arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Named URL arguments.
+</ParamField>
+
+**Returns:** `str` - The URL for the action
+
+```python
+url = self.reverse_action('set-password', args=['1'])
+# Returns: 'http://localhost:8000/api/users/1/set_password'
+```
+
+<Note>
+The `basename` is provided by the router during ViewSet registration. If not using a router, you must provide the `basename` argument to `.as_view()`.
+</Note>
+
+#### get_extra_action_url_map()
+
+**Signature:** `get_extra_action_url_map()`
+
+Builds a map of `{names: urls}` for the extra actions.
+
+**Returns:** `dict[str, str]`
+
+This method will return an empty dict if `detail` was not provided as a view initkwarg.
+
+### Instance Attributes
+
+The following attributes are available during dispatch:
+
+#### basename
+
+The base name used for URL name generation.
+
+**Type:** `str | None`
+
+#### action
+
+The name of the current action (e.g., `list`, `create`, `retrieve`).
+
+**Type:** `str`
+
+```python
+def get_permissions(self):
+    if self.action == 'list':
+        return [IsAuthenticated()]
+    return [IsAdminUser()]
+```
+
+<Warning>
+The `action` attribute is not available in `get_parsers`, `get_authenticators`, and `get_content_negotiator` methods as it is set after they are called.
+</Warning>
+
+#### detail
+
+Boolean indicating if the current action is configured for a list or detail view.
+
+**Type:** `bool | None`
+
+#### suffix
+
+The display suffix for the viewset type - mirrors the `detail` attribute.
+
+**Type:** `str | None`
+
+#### name
+
+The display name for the viewset. This argument is mutually exclusive with `suffix`.
+
+**Type:** `str | None`
+
+#### description
+
+The display description for the individual view of a viewset.
+
+**Type:** `str | None`
+
+---
+
+## GenericViewSet
+
+**Signature:** `class GenericViewSet(ViewSetMixin, GenericAPIView)`
+
+The `GenericViewSet` class does not provide any actions by default, but includes the base set of generic view behavior, such as `get_object()` and `get_queryset()` methods.
+
+```python
+from rest_framework import mixins, viewsets
+
+class UserViewSet(mixins.RetrieveModelMixin,
+                  mixins.ListModelMixin,
+                  viewsets.GenericViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+```
+
+Inherits all attributes and methods from [GenericAPIView](/api/generic-views#genericapiview).
+
+---
+
+## ModelViewSet
+
+**Signature:** `class ModelViewSet(CreateModelMixin, RetrieveModelMixin, UpdateModelMixin, DestroyModelMixin, ListModelMixin, GenericViewSet)`
+
+Provides default implementations for `.list()`, `.retrieve()`, `.create()`, `.update()`, `.partial_update()`, and `.destroy()` actions.
+
+```python
+class AccountViewSet(viewsets.ModelViewSet):
+    queryset = Account.objects.all()
+    serializer_class = AccountSerializer
+    permission_classes = [IsAccountAdminOrReadOnly]
+```
+
+### Provided Actions
+
+- **list()** - List a queryset
+- **retrieve()** - Retrieve a single instance
+- **create()** - Create a new instance
+- **update()** - Update an instance (PUT)
+- **partial_update()** - Partially update an instance (PATCH)
+- **destroy()** - Delete an instance
+
+### Dynamic Querysets
+
+You can provide dynamic behavior by overriding methods:
+
+```python
+class AccountViewSet(viewsets.ModelViewSet):
+    serializer_class = AccountSerializer
+    permission_classes = [IsAccountAdminOrReadOnly]
+    
+    def get_queryset(self):
+        return self.request.user.accounts.all()
+```
+
+<Note>
+When you remove the `queryset` property from your ViewSet, any associated router will be unable to derive the basename automatically, so you must specify the `basename` kwarg during router registration.
+</Note>
+
+---
+
+## ReadOnlyModelViewSet
+
+**Signature:** `class ReadOnlyModelViewSet(RetrieveModelMixin, ListModelMixin, GenericViewSet)`
+
+Provides default `.list()` and `.retrieve()` actions.
+
+```python
+class AccountViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Account.objects.all()
+    serializer_class = AccountSerializer
+```
+
+### Provided Actions
+
+- **list()** - List a queryset
+- **retrieve()** - Retrieve a single instance
+
+---
+
+## Custom ViewSet Base Classes
+
+You may need to provide custom `ViewSet` classes that do not have the full set of `ModelViewSet` actions, or that customize the behavior in some other way.
+
+```python
+from rest_framework import mixins, viewsets
+
+class CreateListRetrieveViewSet(mixins.CreateModelMixin,
+                                mixins.ListModelMixin,
+                                mixins.RetrieveModelMixin,
+                                viewsets.GenericViewSet):
+    """
+    A viewset that provides `retrieve`, `create`, and `list` actions.
+    
+    To use it, override the class and set the `.queryset` and
+    `.serializer_class` attributes.
+    """
+    pass
+```
+
+---
+
+## Action Decorator
+
+### @action()
+
+**Signature:** `@action(detail=None, methods=None, **kwargs)`
+
+Decorator to mark a method as a routable action.
+
+<ParamField path="detail" type="bool" required>
+  Whether this action applies to instance/detail requests (True) or collection/list requests (False).
+</ParamField>
+
+<ParamField path="methods" type="list[str]">
+  HTTP methods this action responds to. Defaults to `['get']`.
+</ParamField>
+
+<ParamField path="url_path" type="str">
+  URL path for this action. Defaults to the method name.
+</ParamField>
+
+<ParamField path="url_name" type="str">
+  URL name for reversing. Defaults to the method name with underscores replaced by hyphens.
+</ParamField>
+
+<ParamField path="permission_classes" type="list[class]">
+  Permission classes for this action.
+</ParamField>
+
+<ParamField path="serializer_class" type="class">
+  Serializer class for this action.
+</ParamField>
+
+<ParamField path="filter_backends" type="list[class]">
+  Filter backends for this action.
+</ParamField>
+
+```python
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    
+    @action(detail=True, methods=['post'])
+    def set_password(self, request, pk=None):
+        user = self.get_object()
+        serializer = PasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            user.set_password(serializer.validated_data['password'])
+            user.save()
+            return Response({'status': 'password set'})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False)
+    def recent_users(self, request):
+        recent_users = User.objects.all().order_by('-last_login')
+        
+        page = self.paginate_queryset(recent_users)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(recent_users, many=True)
+        return Response(serializer.data)
+```
+
+### Multiple HTTP Methods
+
+The `methods` argument accepts multiple HTTP methods:
+
+```python
+@action(detail=True, methods=['post', 'delete'])
+def unset_password(self, request, pk=None):
+    ...
+```
+
+You can also use Python's `HTTPMethod` enum:
+
+```python
+from http import HTTPMethod
+
+@action(detail=True, methods=[HTTPMethod.POST, HTTPMethod.DELETE])
+def unset_password(self, request, pk=None):
+    ...
+```
+
+### Customizing URL and Name
+
+```python
+@action(detail=True, methods=['post'], 
+        url_path='change-password', 
+        url_name='change_password',
+        permission_classes=[IsAdminOrIsSelf])
+def set_password(self, request, pk=None):
+    ...
+```
+
+Generated routes:
+- URL path: `^users/{pk}/change-password/$`
+- URL name: `'user-change_password'`
+
+### Routing Additional HTTP Methods
+
+Extra actions can map additional HTTP methods to separate methods:
+
+```python
+@action(detail=True, methods=['put'], name='Change Password')
+def password(self, request, pk=None):
+    """Update the user's password."""
+    ...
+
+@password.mapping.delete
+def delete_password(self, request, pk=None):
+    """Delete the user's password."""
+    ...
+```
+
+<Note>
+Additional mapped methods do not accept arguments beyond `self`, `request`, and URL kwargs.
+</Note>
+
+---
+
+## ViewSetMixin
+
+**Signature:** `class ViewSetMixin`
+
+The mixin that provides the magic `.as_view()` behavior for viewsets.
+
+This mixin overrides `.as_view()` so that it takes an `actions` keyword that performs the binding of HTTP methods to actions on the resource.
+
+```python
+view = MyViewSet.as_view({'get': 'list', 'post': 'create'})
+```
+
+### Methods
+
+#### as_view()
+
+See [ViewSet.as_view()](#as_view) above.
+
+#### initialize_request()
+
+**Signature:** `initialize_request(request, *args, **kwargs)`
+
+Sets the `.action` attribute on the view, depending on the request method.
+
+<ParamField path="request" type="HttpRequest" required>
+  The Django HTTP request.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments.
+</ParamField>
+
+**Returns:** `Request`
+
+#### reverse_action()
+
+See [ViewSet.reverse_action()](#reverse_action) above.
+
+#### get_extra_actions()
+
+See [ViewSet.get_extra_actions()](#get_extra_actions) above.
+
+#### get_extra_action_url_map()
+
+See [ViewSet.get_extra_action_url_map()](#get_extra_action_url_map) above.

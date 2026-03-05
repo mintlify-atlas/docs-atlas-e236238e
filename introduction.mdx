@@ -1,0 +1,209 @@
+---
+title: Introduction
+description: Build powerful web APIs with Django REST Framework
+---
+
+<div style={{
+  background: 'linear-gradient(135deg, #a40404 0%, #d73a49 100%)',
+  borderRadius: '4px',
+  padding: '60px 40px',
+  textAlign: 'center',
+  color: '#ffffff',
+  marginBottom: '40px'
+}}>
+  <h1 style={{
+    fontSize: '96px',
+    fontFamily: 'Courier New, monospace',
+    fontWeight: '700',
+    margin: '0 0 20px 0',
+    color: '#ffffff'
+  }}>
+    Django REST Framework
+  </h1>
+  <p style={{
+    fontSize: '24px',
+    fontFamily: 'Arial, sans-serif',
+    margin: '0',
+    color: '#ffffff',
+    opacity: '0.95'
+  }}>
+    A powerful and flexible toolkit for building Web APIs
+  </p>
+</div>
+
+## Overview
+
+Django REST Framework is a powerful and flexible toolkit for building Web APIs with Django. It provides a comprehensive set of tools that make it easy to build RESTful APIs quickly and efficiently.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started with Django REST Framework in minutes
+  </Card>
+  <Card title="Tutorial" icon="book" href="/tutorial/1-serialization">
+    Learn through our comprehensive step-by-step tutorial
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/views">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Community" icon="users" href="/community/tutorials-and-resources">
+    Join the community and find resources
+  </Card>
+</CardGroup>
+
+## Why Django REST Framework?
+
+<AccordionGroup>
+  <Accordion title="Web Browsable API" icon="browser">
+    The web browsable API is a huge usability win for your developers. It provides an interactive interface for exploring and testing your API endpoints directly in the browser.
+  </Accordion>
+
+  <Accordion title="Powerful Serialization" icon="database">
+    Comprehensive serialization system that supports both ORM and non-ORM data sources. Convert complex data types like Django model instances to native Python datatypes that can be easily rendered into JSON, XML, or other content types.
+  </Accordion>
+
+  <Accordion title="Authentication & Permissions" icon="shield">
+    Flexible authentication including packages for OAuth1a and OAuth2. Granular permission controls to ensure your API is secure and accessible only to authorized users.
+  </Accordion>
+
+  <Accordion title="Customizable All The Way Down" icon="wrench">
+    Use regular function-based views if you don't need the more powerful features. The framework is designed to be customizable at every level, from serializers to views to routers.
+  </Accordion>
+</AccordionGroup>
+
+## Key Features
+
+- **Powerful serialization system** supporting both ORM and non-ORM data sources
+- **Class-based and function-based views** with generic views and viewsets
+- **Automatic URL routing** with routers
+- **Flexible authentication** including session, token, and OAuth support
+- **Granular permission controls** for fine-grained access management
+- **Built-in pagination, filtering, and throttling** for production-ready APIs
+- **Web browsable API** for easy debugging and exploration
+- **Multiple renderer support** including JSON, XML, YAML, and more
+- **Comprehensive content negotiation** for handling different client requirements
+- **Extensive validation and error handling** for robust API development
+
+## Requirements
+
+<Note>
+  Django REST Framework requires Python 3.10+ and Django 4.2+
+</Note>
+
+We highly recommend and only officially support the latest patch release of each Python and Django series:
+
+- **Python**: 3.10, 3.11, 3.12, 3.13, 3.14
+- **Django**: 4.2, 5.0, 5.1, 5.2, 6.0
+
+## Installation
+
+Install Django REST Framework using pip:
+
+<CodeGroup>
+
+```bash pip
+pip install djangorestframework
+```
+
+```bash poetry
+poetry add djangorestframework
+```
+
+```bash pipenv
+pipenv install djangorestframework
+```
+
+</CodeGroup>
+
+Add `rest_framework` to your `INSTALLED_APPS` setting:
+
+```python settings.py
+INSTALLED_APPS = [
+    # ...
+    'rest_framework',
+]
+```
+
+## Example
+
+Here's a quick example of using REST framework to build a simple model-backed API:
+
+```python urls.py
+from django.contrib.auth.models import User
+from django.urls import include, path
+from rest_framework import routers, serializers, viewsets
+
+
+# Serializers define the API representation.
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = User
+        fields = ['url', 'username', 'email', 'is_staff']
+
+
+# ViewSets define the view behavior.
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+# Routers provide a way of automatically determining the URL conf.
+router = routers.DefaultRouter()
+router.register(r'users', UserViewSet)
+
+# Wire up our API using automatic URL routing.
+urlpatterns = [
+    path('', include(router.urls)),
+    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
+]
+```
+
+Configure your API settings in `settings.py`:
+
+```python settings.py
+REST_FRAMEWORK = {
+    # Use Django's standard `django.contrib.auth` permissions,
+    # or allow read-only access for unauthenticated users.
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly',
+    ]
+}
+```
+
+That's it! You now have a fully functional API. Run your development server:
+
+```bash
+python manage.py runserver
+```
+
+You can now open the API in your browser at `http://127.0.0.1:8000/` and view your new users API.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Detailed installation and configuration instructions
+  </Card>
+  <Card title="Quickstart Tutorial" icon="bolt" href="/quickstart">
+    Build your first API in minutes
+  </Card>
+  <Card title="Step-by-Step Tutorial" icon="graduation-cap" href="/tutorial/1-serialization">
+    Complete tutorial series covering all major features
+  </Card>
+  <Card title="API Reference" icon="book-open" href="/api/views">
+    Comprehensive API documentation
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+<CardGroup cols={3}>
+  <Card title="GitHub" icon="github" href="https://github.com/encode/django-rest-framework">
+    Star us on GitHub and contribute
+  </Card>
+  <Card title="Discussion Group" icon="comments" href="https://groups.google.com/forum/#!forum/django-rest-framework">
+    Ask questions and get help
+  </Card>
+  <Card title="Security Policy" icon="shield-halved" href="https://github.com/encode/django-rest-framework/security/policy">
+    Report security vulnerabilities
+  </Card>
+</CardGroup>

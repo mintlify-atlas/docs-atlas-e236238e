@@ -1,0 +1,380 @@
+---
+title: Caching
+description: API reference for caching in Django REST Framework
+---
+
+DRF works with Django's caching framework to improve API performance.
+
+## Django Cache Configuration
+
+DRF relies on Django's cache framework. Configure caching in your Django settings:
+
+```python
+# settings.py
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',
+    }
+}
+```
+
+### Cache Backends
+
+Django supports multiple cache backends:
+
+<ParamField path="redis" type="RedisCache">
+  Production-ready caching with Redis
+  ```python
+  'BACKEND': 'django.core.cache.backends.redis.RedisCache'
+  ```
+</ParamField>
+
+<ParamField path="memcached" type="MemcachedCache">
+  Fast memory cache
+  ```python
+  'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache'
+  ```
+</ParamField>
+
+<ParamField path="database" type="DatabaseCache">
+  Cache stored in database
+  ```python
+  'BACKEND': 'django.core.cache.backends.db.DatabaseCache'
+  ```
+</ParamField>
+
+<ParamField path="filesystem" type="FileBasedCache">
+  Cache stored on filesystem
+  ```python
+  'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache'
+  ```
+</ParamField>
+
+<ParamField path="locmem" type="LocMemCache">
+  In-memory cache (development only)
+  ```python
+  'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'
+  ```
+</ParamField>
+
+---
+
+## View-Level Caching
+
+### cache_page Decorator
+
+Cache entire view responses:
+
+```python
+from django.views.decorators.cache import cache_page
+from rest_framework.decorators import api_view
+
+@cache_page(60 * 15)  # Cache for 15 minutes
+@api_view(['GET'])
+def user_list(request):
+    users = User.objects.all()
+    serializer = UserSerializer(users, many=True)
+    return Response(serializer.data)
+```
+
+### With Class-Based Views
+
+```python
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from rest_framework.views import APIView
+
+class UserList(APIView):
+    @method_decorator(cache_page(60 * 15))
+    def get(self, request):
+        users = User.objects.all()
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
+```
+
+### With ViewSets
+
+```python
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from rest_framework import viewsets
+
+class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    
+    @method_decorator(cache_page(60 * 15))
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+    
+    @method_decorator(cache_page(60 * 15))
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+```
+
+---
+
+## URL-Level Caching
+
+Cache at the URL configuration level:
+
+```python
+from django.urls import path
+from django.views.decorators.cache import cache_page
+from myapp import views
+
+urlpatterns = [
+    path('users/', cache_page(60 * 15)(views.user_list)),
+    path('posts/', cache_page(60 * 5)(views.post_list)),
+]
+```
+
+---
+
+## Per-User Caching
+
+Cache responses differently for each user:
+
+```python
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
+
+@cache_page(60 * 15)
+@vary_on_headers('Authorization')
+@api_view(['GET'])
+def my_profile(request):
+    user = request.user
+    serializer = UserSerializer(user)
+    return Response(serializer.data)
+```
+
+---
+
+## Low-Level Cache API
+
+Use Django's cache API directly for fine-grained control:
+
+```python
+from django.core.cache import cache
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class UserDetail(APIView):
+    def get(self, request, pk):
+        # Try to get from cache
+        cache_key = f'user_{pk}'
+        user_data = cache.get(cache_key)
+        
+        if user_data is None:
+            # Not in cache, fetch from database
+            user = User.objects.get(pk=pk)
+            serializer = UserSerializer(user)
+            user_data = serializer.data
+            # Store in cache for 15 minutes
+            cache.set(cache_key, user_data, 60 * 15)
+        
+        return Response(user_data)
+```
+
+### Cache Methods
+
+#### `cache.get(key, default=None)`
+
+Retrieve a value from cache:
+
+```python
+value = cache.get('my_key')
+if value is None:
+    value = expensive_calculation()
+    cache.set('my_key', value, timeout=300)
+```
+
+#### `cache.set(key, value, timeout=None)`
+
+Store a value in cache:
+
+```python
+cache.set('user_123', user_data, timeout=60 * 15)
+```
+
+#### `cache.delete(key)`
+
+Delete a value from cache:
+
+```python
+cache.delete('user_123')
+```
+
+#### `cache.get_many(keys)`
+
+Get multiple values at once:
+
+```python
+keys = ['user_1', 'user_2', 'user_3']
+values = cache.get_many(keys)
+```
+
+#### `cache.set_many(dict, timeout=None)`
+
+Set multiple values at once:
+
+```python
+cache.set_many({
+    'user_1': data1,
+    'user_2': data2,
+}, timeout=60 * 15)
+```
+
+#### `cache.clear()`
+
+Clear all cache:
+
+```python
+cache.clear()
+```
+
+---
+
+## Cache Invalidation
+
+### Manual Invalidation
+
+```python
+from django.core.cache import cache
+from rest_framework import viewsets
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        # Invalidate cache for this user
+        cache.delete(f'user_{instance.pk}')
+        cache.delete('user_list')
+```
+
+### Signal-Based Invalidation
+
+```python
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+from django.core.cache import cache
+
+@receiver(post_save, sender=User)
+def invalidate_user_cache(sender, instance, **kwargs):
+    cache.delete(f'user_{instance.pk}')
+    cache.delete('user_list')
+
+@receiver(post_delete, sender=User)
+def invalidate_user_list_cache(sender, instance, **kwargs):
+    cache.delete('user_list')
+```
+
+---
+
+## Conditional Requests
+
+Use ETags and Last-Modified headers for client-side caching:
+
+```python
+from django.views.decorators.http import condition
+from rest_framework.decorators import api_view
+
+def latest_user_update(request, *args, **kwargs):
+    return User.objects.latest('updated_at').updated_at
+
+@condition(last_modified_func=latest_user_update)
+@api_view(['GET'])
+def user_list(request):
+    users = User.objects.all()
+    serializer = UserSerializer(users, many=True)
+    return Response(serializer.data)
+```
+
+---
+
+## Caching Strategies
+
+### Read-Through Cache
+
+```python
+def get_user(pk):
+    cache_key = f'user_{pk}'
+    user_data = cache.get(cache_key)
+    if user_data is None:
+        user = User.objects.get(pk=pk)
+        user_data = UserSerializer(user).data
+        cache.set(cache_key, user_data, 60 * 15)
+    return user_data
+```
+
+### Write-Through Cache
+
+```python
+def update_user(pk, data):
+    user = User.objects.get(pk=pk)
+    serializer = UserSerializer(user, data=data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    # Update cache immediately
+    cache_key = f'user_{pk}'
+    cache.set(cache_key, serializer.data, 60 * 15)
+    return serializer.data
+```
+
+### Cache Warming
+
+```python
+from django.core.management.base import BaseCommand
+from django.core.cache import cache
+
+class Command(BaseCommand):
+    def handle(self, *args, **options):
+        # Pre-populate cache
+        users = User.objects.all()
+        for user in users:
+            cache_key = f'user_{user.pk}'
+            data = UserSerializer(user).data
+            cache.set(cache_key, data, 60 * 60)
+```
+
+---
+
+## Best Practices
+
+### Use Cache Keys Wisely
+
+```python
+# Include version in cache keys
+cache_key = f'v1:user:{pk}'
+
+# Include query parameters for lists
+import hashlib
+query_hash = hashlib.md5(str(request.query_params).encode()).hexdigest()
+cache_key = f'users:list:{query_hash}'
+```
+
+### Set Appropriate Timeouts
+
+```python
+# Short timeout for frequently changing data
+cache.set('trending_posts', data, 60 * 5)  # 5 minutes
+
+# Long timeout for static data
+cache.set('country_list', data, 60 * 60 * 24)  # 24 hours
+```
+
+### Handle Cache Failures Gracefully
+
+```python
+try:
+    data = cache.get('my_key')
+except Exception as e:
+    logger.error(f'Cache error: {e}')
+    data = None
+
+if data is None:
+    data = fetch_from_database()
+```

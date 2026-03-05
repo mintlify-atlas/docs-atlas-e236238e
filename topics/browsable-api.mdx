@@ -1,0 +1,388 @@
+---
+title: The Browsable API
+description: Understanding and customizing Django REST Framework's browsable HTML API interface
+---
+
+<Note>
+  It is a profoundly erroneous truism... that we should cultivate the habit of thinking of what we are doing. The precise opposite is the case. Civilization advances by extending the number of important operations which we can perform without thinking about them.
+  
+  — Alfred North Whitehead, An Introduction to Mathematics (1911)
+</Note>
+
+API may stand for Application *Programming* Interface, but humans have to be able to read the APIs, too; someone has to do the programming. Django REST Framework supports generating human-friendly HTML output for each resource when the `HTML` format is requested.
+
+These pages allow for easy browsing of resources, as well as forms for submitting data to the resources using `POST`, `PUT`, and `DELETE`.
+
+## Overview
+
+The browsable API is rendered using the `BrowsableAPIRenderer` class, which is included in the default renderer classes:
+
+```python rest_framework/renderers.py
+class BrowsableAPIRenderer(BaseRenderer):
+    """
+    HTML renderer used to self-document the API.
+    """
+    media_type = 'text/html'
+    format = 'api'
+    template = 'rest_framework/api.html'
+    charset = 'utf-8'
+```
+
+## Key Features
+
+### Clickable URLs
+
+If you include fully-qualified URLs in your resource output, they will be 'urlized' and made clickable for easy browsing by humans:
+
+```python
+from rest_framework.reverse import reverse
+
+class UserSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    
+    def get_url(self, obj):
+        return reverse('user-detail', args=[obj.pk], request=self.context['request'])
+```
+
+The `rest_framework.reverse` helper ensures URLs are fully qualified and clickable in the browsable API.
+
+### Format Selection
+
+By default, the API returns the format specified by the headers. For browsers, this is HTML. You can override the format using the `?format=` query parameter:
+
+```bash
+# View as browsable HTML
+http://api.example.com/users/
+
+# View as JSON
+http://api.example.com/users/?format=json
+
+# View as API (browsable API)
+http://api.example.com/users/?format=api
+```
+
+<Info>
+  **Browser Extensions:** Install JSON viewing extensions for better JSON display:
+  - Firefox: [JSONView](https://addons.mozilla.org/en-US/firefox/addon/jsonview/)
+  - Chrome: [JSON Formatter](https://chrome.google.com/webstore/detail/chklaanhfefbnpoihckbnefhakgolnmc)
+</Info>
+
+### Interactive Forms
+
+The browsable API automatically generates forms for `POST`, `PUT`, `PATCH`, and `DELETE` operations based on your serializers:
+
+```python
+class ArticleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Article
+        fields = ['id', 'title', 'content', 'author', 'published_date']
+```
+
+This serializer will automatically generate an interactive form in the browsable API for creating and updating articles.
+
+## Authentication
+
+To add authentication to the browsable API, include routes named `"login"` and `"logout"` under the namespace `"rest_framework"`:
+
+```python
+from django.urls import include, path
+
+urlpatterns = [
+    # Your API URLs
+    path('api/', include('myapp.urls')),
+    
+    # REST framework login/logout for browsable API
+    path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
+]
+```
+
+<Warning>
+  The `namespace="rest_framework"` parameter is required. Without it, the login/logout links won't appear in the browsable API.
+</Warning>
+
+## Customization
+
+The browsable API is built with [Bootstrap 3.4.1](https://getbootstrap.com/), making it easy to customize the look and feel.
+
+### Basic Customization
+
+Create a template called `rest_framework/api.html` that extends from `rest_framework/base.html`:
+
+```django
+{%% extends "rest_framework/base.html" %%}
+
+{%% block title %%}My Custom API{%% endblock %%}
+
+{%% block branding %%}
+  <a class="navbar-brand" href="/api/">
+    My Company API
+  </a>
+{%% endblock %%}
+```
+
+### Overriding the Default Theme
+
+Replace the default Bootstrap theme with a custom one:
+
+```django
+{%% extends "rest_framework/base.html" %%}
+
+{%% block bootstrap_theme %%}
+  <link rel="stylesheet" href="/path/to/my/bootstrap.css" type="text/css">
+{%% endblock %%}
+```
+
+**Using Bootswatch Themes:**
+
+[Bootswatch](https://bootswatch.com/) provides free Bootstrap themes. To use one:
+
+1. Download the `bootstrap.min.css` file from a Bootswatch theme
+2. Add it to your static files
+3. Override the `bootstrap_theme` block
+
+```django
+{%% extends "rest_framework/base.html" %%}
+
+{%% block bootstrap_theme %%}
+  <link rel="stylesheet" 
+        href="https://cdn.jsdelivr.net/npm/bootswatch@3.4.1/flatly/bootstrap.min.css" 
+        type="text/css">
+{%% endblock %%}
+
+{%% block bootstrap_navbar_variant %%}{%% endblock %%}
+```
+
+**Example Themes:**
+
+![Cerulean theme](../img/cerulean.png)
+*Bootswatch 'Cerulean' theme*
+
+![Slate theme](../img/slate.png)
+*Bootswatch 'Slate' theme*
+
+### Third-Party Customization Packages
+
+Use pre-built packages for modern UI designs:
+
+<Accordion title="drf-restwind (TailwindCSS)">
+  [drf-restwind](https://github.com/youzarsiph/drf-restwind) - A modern re-imagining using TailwindCSS and DaisyUI.
+  
+  ```bash
+  pip install drf-restwind
+  ```
+  
+  ![API Root](../img/drf-rw-api-root.png)
+  ![List View](../img/drf-rw-list-view.png)
+  ![Detail View](../img/drf-rw-detail-view.png)
+</Accordion>
+
+<Accordion title="drf-redesign (Bootstrap 5)">
+  [drf-redesign](https://github.com/youzarsiph/drf-redesign) - Modern Bootstrap 5 design with dark mode support.
+  
+  ```bash
+  pip install drf-redesign
+  ```
+  
+  ![API Root](../img/drf-r-api-root.png)
+  ![List View](../img/drf-r-list-view.png)
+  ![Detail View](../img/drf-r-detail-view.png)
+</Accordion>
+
+<Accordion title="drf-material (Material Design)">
+  [drf-material](https://github.com/youzarsiph/drf-material) - Material Design for Django REST Framework.
+  
+  ```bash
+  pip install drf-material
+  ```
+  
+  ![Material Design Views](../img/drf-m-api-root.png)
+</Accordion>
+
+### Available Template Blocks
+
+All blocks available in the `base.html` template:
+
+| Block | Description |
+|-------|-------------|
+| `body` | The entire HTML `<body>` |
+| `bodyclass` | CSS class for the `<body>` tag (empty by default) |
+| `bootstrap_theme` | CSS for the Bootstrap theme |
+| `bootstrap_navbar_variant` | CSS class for the navbar (default: `navbar-inverse`) |
+| `branding` | Branding section of the navbar |
+| `breadcrumbs` | Links showing resource nesting |
+| `script` | JavaScript files for the page |
+| `style` | CSS stylesheets for the page |
+| `title` | Page title |
+| `userlinks` | Links on the right of the header (login/logout) |
+
+**Example - Adding Custom CSS:**
+
+```django
+{%% extends "rest_framework/base.html" %%}
+
+{%% block style %%}
+  {{ block.super }}
+  <style>
+    .navbar-brand {
+      font-weight: bold;
+      color: #2c3e50 !important;
+    }
+  </style>
+{%% endblock %%}
+```
+
+### Bootstrap Components
+
+All standard [Bootstrap components](https://getbootstrap.com/2.3.2/components.html) are available for use in your custom templates.
+
+**Tooltips:**
+
+The browsable API uses Bootstrap tooltips. Add the `js-tooltip` class and `title` attribute to any element:
+
+```django
+<button class="btn btn-primary js-tooltip" title="Click to submit">
+  Submit
+</button>
+```
+
+### Customizing the Login Template
+
+Create a template called `rest_framework/login.html` that extends from `rest_framework/login_base.html`:
+
+```django
+{%% extends "rest_framework/login_base.html" %%}
+
+{%% block branding %%}
+  <h3 style="margin: 0 0 20px;">My Company API</h3>
+  <p>Please log in to access the API</p>
+{%% endblock %%}
+
+{%% block bootstrap_theme %%}
+  <link rel="stylesheet" href="/static/css/custom-login.css" type="text/css">
+{%% endblock %%}
+```
+
+## Advanced Customization
+
+### Template Context
+
+The following context variables are available in the browsable API template:
+
+```python rest_framework/renderers.py
+def get_context(self, data, accepted_media_type, renderer_context):
+    return {
+        'content': self.get_content(renderer, data, accepted_media_type, renderer_context),
+        'view': view,
+        'request': request,
+        'response': response,
+        'user': request.user,
+        'description': self.get_description(view, response.status_code),
+        'name': self.get_name(view),
+        'version': VERSION,
+        'paginator': paginator,
+        'breadcrumblist': self.get_breadcrumbs(request),
+        'allowed_methods': view.allowed_methods,
+        'available_formats': [renderer_cls.format for renderer_cls in view.renderer_classes],
+        'response_headers': response_headers,
+        # Forms for different HTTP methods
+        'put_form': self.get_rendered_html_form(data, view, 'PUT', request),
+        'post_form': self.get_rendered_html_form(data, view, 'POST', request),
+        'delete_form': self.get_rendered_html_form(data, view, 'DELETE', request),
+        'options_form': self.get_rendered_html_form(data, view, 'OPTIONS', request),
+        # Additional context
+        'api_settings': api_settings,
+        'csrf_cookie_name': csrf_cookie_name,
+        'csrf_header_name': csrf_header_name
+    }
+```
+
+### Customizing Context
+
+Override `BrowsableAPIRenderer.get_context()` to customize the template context:
+
+```python
+from rest_framework.renderers import BrowsableAPIRenderer
+
+class CustomBrowsableAPIRenderer(BrowsableAPIRenderer):
+    def get_context(self, data, accepted_media_type, renderer_context):
+        context = super().get_context(data, accepted_media_type, renderer_context)
+        context['company_name'] = 'My Company'
+        context['support_email'] = 'support@example.com'
+        return context
+
+class MyAPIView(APIView):
+    renderer_classes = [CustomBrowsableAPIRenderer, JSONRenderer]
+```
+
+### Not Using base.html
+
+For complete control, don't extend `base.html` at all. Create your own template from scratch:
+
+```django
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ name }}</title>
+  <link rel="stylesheet" href="/static/css/custom-api.css">
+</head>
+<body>
+  <nav><!-- Your custom navigation --></nav>
+  <main>
+    <h1>{{ name }}</h1>
+    <div>{{ description|safe }}</div>
+    <pre>{{ content }}</pre>
+  </main>
+</body>
+</html>
+```
+
+### Handling Large Choice Fields
+
+When a `ChoiceField` has too many options, rendering can become slow. Replace the select input with a text input:
+
+```python
+author = serializers.HyperlinkedRelatedField(
+    queryset=User.objects.all(),
+    style={'base_template': 'input.html'}  # Use text input instead of select
+)
+```
+
+### Custom Autocomplete Widgets
+
+For a better user experience with large choice fields, implement a custom autocomplete widget:
+
+<Warning>
+  REST framework 3.0+ does not support the `widget` keyword argument. You must write custom HTML templates explicitly.
+</Warning>
+
+Refer to autocomplete packages like [django-autocomplete-light](https://github.com/yourlabs/django-autocomplete-light) for implementation patterns, but note you'll need to create custom HTML templates.
+
+## Disabling the Browsable API
+
+To disable the browsable API entirely, remove `BrowsableAPIRenderer` from your renderer classes:
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        # Remove BrowsableAPIRenderer
+    ],
+}
+```
+
+Or on a per-view basis:
+
+```python
+from rest_framework.renderers import JSONRenderer
+
+class UserList(APIView):
+    renderer_classes = [JSONRenderer]  # Only JSON, no browsable API
+```
+
+## Related Resources
+
+- [Renderers](/api/renderers) - Details on `BrowsableAPIRenderer` and other renderers
+- [HTML & Forms](/topics/html-and-forms) - Using serializers as HTML forms
+- [Templates](/topics/html-and-forms) - Template tag reference
+- [Documenting Your API](/topics/documenting-your-api) - Other documentation approaches

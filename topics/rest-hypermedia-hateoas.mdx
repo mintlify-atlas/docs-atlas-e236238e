@@ -1,0 +1,479 @@
+---
+title: REST, Hypermedia & HATEOAS
+description: Understanding REST principles, hypermedia APIs, and HATEOAS in Django REST Framework
+---
+
+<Note>
+  You keep using that word "REST". I do not think it means what you think it means.
+  
+  — Mike Amundsen, [REST fest 2012 keynote](https://vimeo.com/channels/restfest/49503453)
+</Note>
+
+## Disclaimer
+
+The name "Django REST framework" was chosen in early 2011 simply to ensure the project would be easily found by developers. Throughout this documentation, we use the more accurate terminology of "Web APIs".
+
+<Info>
+  If you're serious about designing a Hypermedia API, you should look to resources outside this documentation to help inform your design choices.
+</Info>
+
+## Required Reading
+
+Before building a true hypermedia API, familiarize yourself with these foundational resources:
+
+### Core Resources
+
+<Accordion title="Roy Fielding's Dissertation">
+  **[Architectural Styles and the Design of Network-based Software Architectures](https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm)**
+  
+  The original dissertation that defined REST. Essential reading for understanding the architectural constraints and principles behind RESTful design.
+  
+  Key chapters:
+  - Chapter 5: Representational State Transfer (REST)
+  - Chapter 6: REST Applied to the Web
+</Accordion>
+
+<Accordion title="Roy Fielding's Blog Post">
+  **[REST APIs must be hypertext-driven](https://roy.gbiv.com/untangled/2008/rest-apis-must-be-hypertext-driven)**
+  
+  A clarifying post where Fielding explains that APIs without hypermedia are not RESTful. Addresses common misconceptions about REST.
+</Accordion>
+
+<Accordion title="RESTful Web APIs (Book)">
+  **[RESTful Web APIs](http://restfulwebapis.org/)** by Leonard Richardson & Mike Amundsen
+  
+  Comprehensive guide to designing practical RESTful APIs with hypermedia. Covers media types, hypermedia formats, and real-world implementation strategies.
+</Accordion>
+
+<Accordion title="Building Hypermedia APIs (Book)">
+  **[Building Hypermedia APIs with HTML5 and Node](https://www.amazon.com/Building-Hypermedia-APIs-HTML5-Node/dp/1449306578)** by Mike Amundsen
+  
+  Practical guide to building hypermedia APIs, with focus on HTML5 as a hypermedia format.
+</Accordion>
+
+<Accordion title="Designing Hypermedia APIs">
+  **[Designing Hypermedia APIs](http://designinghypermediaapis.com/)** by Steve Klabnik
+  
+  Focused guide on the principles of hypermedia API design.
+</Accordion>
+
+### Additional Resources
+
+- **[Richardson Maturity Model](https://martinfowler.com/articles/richardsonMaturityModel.html)** - A model for understanding REST API maturity levels
+- **[Hypermedia API Reading List](http://blog.steveklabnik.com/posts/2012-02-27-hypermedia-api-reading-list)** - Comprehensive background reading
+
+## Understanding REST Principles
+
+### The REST Constraint
+
+A truly RESTful API must follow these architectural constraints:
+
+1. **Client-Server** - Separation of concerns
+2. **Stateless** - Each request contains all information needed
+3. **Cacheable** - Responses must define themselves as cacheable or not
+4. **Uniform Interface** - Resource identification, manipulation through representations
+5. **Layered System** - Client cannot tell if connected directly to end server
+6. **Hypermedia as the Engine of Application State (HATEOAS)** - Clients interact through hypermedia provided dynamically by the server
+
+### Richardson Maturity Model
+
+APIs can be classified by their REST maturity:
+
+**Level 0: The Swamp of POX**
+- Single URI, single HTTP method (usually POST)
+- All operations tunneled through POST
+
+**Level 1: Resources**
+- Multiple URI-addressable resources
+- Still using single HTTP method
+
+**Level 2: HTTP Verbs**
+- Uses HTTP methods appropriately (GET, POST, PUT, DELETE)
+- Uses HTTP status codes
+- Most "REST APIs" stop here
+
+**Level 3: Hypermedia Controls**
+- Uses HATEOAS
+- Responses include links to related resources
+- True REST
+
+<Warning>
+  Most APIs that claim to be "RESTful" are actually Level 2 on the Richardson Maturity Model. They use HTTP methods and status codes but lack hypermedia controls.
+</Warning>
+
+## What is HATEOAS?
+
+**Hypermedia as the Engine of Application State (HATEOAS)** means that:
+
+- API responses include links to related resources and available actions
+- Clients navigate the API by following links, not constructing URLs
+- The API is self-documenting through the links and forms it provides
+- API evolution doesn't break clients (if they follow links)
+
+### HATEOAS Example
+
+**Traditional API Response:**
+
+```json
+{
+  "id": 123,
+  "username": "alice",
+  "email": "alice@example.com"
+}
+```
+
+**Hypermedia API Response:**
+
+```json
+{
+  "id": 123,
+  "username": "alice",
+  "email": "alice@example.com",
+  "_links": {
+    "self": {"href": "/users/123"},
+    "posts": {"href": "/users/123/posts"},
+    "friends": {"href": "/users/123/friends"},
+    "edit": {"href": "/users/123", "method": "PUT"},
+    "delete": {"href": "/users/123", "method": "DELETE"}
+  }
+}
+```
+
+Clients follow the `_links` to discover available operations rather than hardcoding URLs.
+
+## Building Hypermedia APIs with REST Framework
+
+REST framework is an agnostic Web API toolkit. It helps guide you toward building well-connected APIs but doesn't strictly enforce any particular design style.
+
+### What REST Framework Provides
+
+<Accordion title="Browsable API (HTML Hypermedia)">
+  The browsable API is built on HTML - the original hypermedia language of the web:
+  
+  ```python
+  REST_FRAMEWORK = {
+      'DEFAULT_RENDERER_CLASSES': [
+          'rest_framework.renderers.BrowsableAPIRenderer',
+          'rest_framework.renderers.JSONRenderer',
+      ],
+  }
+  ```
+  
+  The browsable API provides:
+  - Clickable links between resources
+  - Forms for available actions
+  - Self-documenting interface
+</Accordion>
+
+<Accordion title="Serialization for Media Types">
+  Build appropriate media types using serializers:
+  
+  ```python
+  from rest_framework import serializers
+  
+  class UserSerializer(serializers.HyperlinkedModelSerializer):
+      class Meta:
+          model = User
+          fields = ['url', 'username', 'email', 'posts']
+  ```
+  
+  `HyperlinkedModelSerializer` automatically includes links to related resources.
+</Accordion>
+
+<Accordion title="Hyperlinked Relations">
+  Use hyperlinked fields to connect resources:
+  
+  ```python
+  class PostSerializer(serializers.HyperlinkedModelSerializer):
+      author = serializers.HyperlinkedRelatedField(
+          view_name='user-detail',
+          read_only=True
+      )
+      comments = serializers.HyperlinkedRelatedField(
+          view_name='comment-detail',
+          many=True,
+          read_only=True
+      )
+      
+      class Meta:
+          model = Post
+          fields = ['url', 'title', 'content', 'author', 'comments']
+  ```
+</Accordion>
+
+<Accordion title="Content Negotiation">
+  Support multiple media types:
+  
+  ```python
+  from rest_framework.renderers import JSONRenderer
+  from rest_framework.parsers import JSONParser
+  
+  class ArticleViewSet(viewsets.ModelViewSet):
+      renderer_classes = [JSONRenderer, BrowsableAPIRenderer, HALJSONRenderer]
+      parser_classes = [JSONParser, HALJSONParser]
+  ```
+</Accordion>
+
+### What REST Framework Doesn't Provide
+
+REST framework does not provide by default:
+
+- Machine-readable hypermedia formats (HAL, Collection+JSON, JSON API, HTML microformats)
+- Auto-magical fully HATEOAS-style APIs
+- Hypermedia-based form descriptions
+- Semantically labeled hyperlinks
+
+<Info>
+  Providing these features would involve making opinionated choices about API design that should remain outside the framework's scope.
+</Info>
+
+## Hypermedia Formats
+
+Several standardized hypermedia formats exist:
+
+### HAL (Hypertext Application Language)
+
+**[HAL](http://stateless.co/hal_specification.html)** is a simple format that uses `_links` and `_embedded` conventions:
+
+```json
+{
+  "_links": {
+    "self": {"href": "/orders/523"},
+    "warehouse": {"href": "/warehouses/56"},
+    "invoice": {"href": "/invoices/873"}
+  },
+  "currency": "USD",
+  "status": "shipped",
+  "total": 10.20
+}
+```
+
+**Implementing HAL:**
+
+```python
+from rest_framework import serializers
+
+class HALSerializer(serializers.Serializer):
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        links = {
+            'self': {'href': self.context['request'].build_absolute_uri()}
+        }
+        return {'_links': links, **data}
+```
+
+### Collection+JSON
+
+**[Collection+JSON](http://www.amundsen.com/media-types/collection/)** is designed for managing collections of resources:
+
+```json
+{
+  "collection": {
+    "version": "1.0",
+    "href": "/friends/",
+    "items": [
+      {
+        "href": "/friends/1",
+        "data": [{"name": "name", "value": "Alice"}]
+      }
+    ],
+    "template": {
+      "data": [{"name": "name", "value": ""}]
+    }
+  }
+}
+```
+
+### JSON API
+
+**[JSON API](http://jsonapi.org/)** is a specification for building APIs with standardized request/response formats:
+
+```json
+{
+  "data": {
+    "type": "articles",
+    "id": "1",
+    "attributes": {
+      "title": "REST API Design"
+    },
+    "relationships": {
+      "author": {
+        "links": {
+          "related": "/articles/1/author"
+        }
+      }
+    }
+  }
+}
+```
+
+### HTML Microformats
+
+**[Microformats](http://microformats.org/wiki/Main_Page)** embed semantic information in HTML:
+
+```html
+<div class="h-card">
+  <span class="p-name">Alice Smith</span>
+  <a class="u-email" href="mailto:alice@example.com">alice@example.com</a>
+  <a class="u-url" href="https://alice.example.com">Website</a>
+</div>
+```
+
+## Implementing Hypermedia in REST Framework
+
+### Using HyperlinkedModelSerializer
+
+The easiest way to add hypermedia to your API:
+
+```python
+from rest_framework import serializers
+
+class ArticleSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Article
+        fields = ['url', 'title', 'content', 'author', 'published_date']
+```
+
+This automatically includes:
+- `url` field pointing to the resource
+- Related fields as hyperlinks instead of IDs
+
+### Custom Hypermedia Renderer
+
+Create a custom renderer for your chosen hypermedia format:
+
+```python
+from rest_framework.renderers import JSONRenderer
+
+class HALJSONRenderer(JSONRenderer):
+    media_type = 'application/hal+json'
+    
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if data is None:
+            return b''
+        
+        # Transform data to HAL format
+        response_dict = {
+            '_links': self._extract_links(data, renderer_context),
+        }
+        
+        # Add embedded resources
+        embedded = self._extract_embedded(data)
+        if embedded:
+            response_dict['_embedded'] = embedded
+        
+        # Add properties
+        response_dict.update(self._extract_properties(data))
+        
+        return super().render(response_dict, accepted_media_type, renderer_context)
+    
+    def _extract_links(self, data, renderer_context):
+        links = {'self': {'href': renderer_context['request'].path}}
+        # Extract hyperlinked fields
+        for key, value in data.items():
+            if isinstance(value, str) and value.startswith('http'):
+                links[key] = {'href': value}
+        return links
+    
+    def _extract_embedded(self, data):
+        # Extract nested objects
+        embedded = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                embedded[key] = value
+        return embedded
+    
+    def _extract_properties(self, data):
+        # Extract simple properties
+        return {
+            k: v for k, v in data.items()
+            if not isinstance(v, (dict, list)) and not (isinstance(v, str) and v.startswith('http'))
+        }
+```
+
+### Adding Actions to Responses
+
+Include available actions in responses:
+
+```python
+from rest_framework import serializers
+
+class ArticleSerializer(serializers.HyperlinkedModelSerializer):
+    actions = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Article
+        fields = ['url', 'title', 'content', 'actions']
+    
+    def get_actions(self, obj):
+        request = self.context['request']
+        actions = {}
+        
+        # Check permissions for each action
+        if request.user.has_perm('articles.change_article', obj):
+            actions['update'] = {
+                'href': obj.get_absolute_url(),
+                'method': 'PUT'
+            }
+        
+        if request.user.has_perm('articles.delete_article', obj):
+            actions['delete'] = {
+                'href': obj.get_absolute_url(),
+                'method': 'DELETE'
+            }
+        
+        return actions
+```
+
+## Best Practices
+
+<Accordion title="Start with HyperlinkedModelSerializer">
+  Use `HyperlinkedModelSerializer` as a starting point:
+  
+  ```python
+  class MySerializer(serializers.HyperlinkedModelSerializer):
+      class Meta:
+          model = MyModel
+          fields = ['url', 'name', 'related_resource']
+  ```
+</Accordion>
+
+<Accordion title="Choose an Appropriate Media Type">
+  Select a hypermedia format that fits your use case:
+  - **HAL** - Simple, widely supported
+  - **JSON API** - Rich specification with strong conventions
+  - **Collection+JSON** - Good for collection-oriented APIs
+  - **HTML** - For human-readable APIs (browsable API)
+</Accordion>
+
+<Accordion title="Include Links to Related Resources">
+  Always include links to related resources:
+  
+  ```python
+  {
+    "id": 123,
+    "title": "Article",
+    "_links": {
+      "author": "/users/456",
+      "comments": "/articles/123/comments"
+    }
+  }
+  ```
+</Accordion>
+
+<Accordion title="Document Your Media Type">
+  Provide clear documentation about your chosen hypermedia format and how clients should interact with it.
+</Accordion>
+
+<Accordion title="Test with Real Clients">
+  Ensure your hypermedia API works well with actual client implementations. The true test of a hypermedia API is whether clients can navigate it without hardcoded URLs.
+</Accordion>
+
+## Related Resources
+
+- [Serializers](/api/serializers) - Including `HyperlinkedModelSerializer`
+- [Renderers](/api/renderers) - Custom renderer implementation
+- [Parsers](/api/parsers) - Custom parser implementation
+- [Relations](/api/relations) - Hyperlinked and nested relationships
+- [Content Negotiation](/api/content-negotiation) - Media type selection
+- [Documenting Your API](/topics/documenting-your-api) - API documentation strategies

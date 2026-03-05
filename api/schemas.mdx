@@ -1,0 +1,280 @@
+---
+title: Schemas
+description: API reference for Django REST Framework schema generation
+---
+
+Schema generation allows automatic documentation of your API using OpenAPI or CoreAPI formats.
+
+## get_schema_view
+
+Return a schema view for your API.
+
+```python
+from rest_framework.schemas import get_schema_view
+
+schema_view = get_schema_view(
+    title='My API',
+    description='API documentation',
+    version='1.0.0',
+)
+```
+
+### Parameters
+
+<ParamField path="title" type="str">
+  The title of your API
+</ParamField>
+
+<ParamField path="url" type="str">
+  The base URL for your API
+</ParamField>
+
+<ParamField path="description" type="str">
+  A description of your API
+</ParamField>
+
+<ParamField path="urlconf" type="str">
+  Django URL configuration module to use. Default is `None` (use default)
+</ParamField>
+
+<ParamField path="renderer_classes" type="list">
+  List of renderer classes to use for the schema view
+</ParamField>
+
+<ParamField path="public" type="bool">
+  If `True`, include all endpoints. If `False`, only include endpoints the user has permission to access. Default is `False`
+</ParamField>
+
+<ParamField path="patterns" type="list">
+  List of URL patterns to include in the schema. Default is `None` (use all)
+</ParamField>
+
+<ParamField path="generator_class" type="class">
+  Schema generator class to use. Default is `None` (auto-detect)
+</ParamField>
+
+<ParamField path="authentication_classes" type="list">
+  Authentication classes for the schema view
+</ParamField>
+
+<ParamField path="permission_classes" type="list">
+  Permission classes for the schema view
+</ParamField>
+
+<ParamField path="version" type="str">
+  API version string
+</ParamField>
+
+---
+
+## SchemaGenerator
+
+Generates OpenAPI schemas from URL patterns.
+
+```python
+from rest_framework.schemas.openapi import SchemaGenerator
+
+generator = SchemaGenerator(
+    title='My API',
+    version='1.0.0',
+    description='API documentation',
+)
+schema = generator.get_schema()
+```
+
+### Methods
+
+#### `get_schema(request=None, public=False)`
+
+Generate and return the OpenAPI schema.
+
+<ParamField path="request" type="Request">
+  Request instance for permission checking
+</ParamField>
+
+<ParamField path="public" type="bool">
+  If `True`, include all endpoints regardless of permissions
+</ParamField>
+
+#### `get_info()`
+
+Return the info section of the OpenAPI schema.
+
+---
+
+## AutoSchema
+
+Per-endpoint view introspection for automatic schema generation.
+
+```python
+from rest_framework.schemas.openapi import AutoSchema
+from rest_framework.views import APIView
+
+class MyView(APIView):
+    schema = AutoSchema(
+        tags=['my-tag'],
+        operation_id_base='MyOperation',
+        component_name='MyComponent',
+    )
+```
+
+### Constructor
+
+<ParamField path="tags" type="list">
+  List of tags for the operation
+</ParamField>
+
+<ParamField path="operation_id_base" type="str">
+  Base name for operation IDs. If empty, deduced from Model/Serializer/View name
+</ParamField>
+
+<ParamField path="component_name" type="str">
+  Component name for the schema. If empty, deduced from Serializer class name
+</ParamField>
+
+### Methods
+
+#### `get_operation(path, method)`
+
+Generate the OpenAPI operation object for this endpoint.
+
+<ParamField path="path" type="str" required>
+  URL path for the endpoint
+</ParamField>
+
+<ParamField path="method" type="str" required>
+  HTTP method
+</ParamField>
+
+#### `get_components(path, method)`
+
+Return component schemas from the serializer.
+
+#### `get_operation_id(path, method)`
+
+Compute the operation ID for this endpoint.
+
+#### `get_description(path, method)`
+
+Get the description for the operation from the view's docstring.
+
+#### `get_path_parameters(path, method)`
+
+Return path parameters from templated URL variables.
+
+#### `get_filter_parameters(path, method)`
+
+Return query parameters from filter backends.
+
+#### `get_pagination_parameters(path, method)`
+
+Return query parameters from pagination class.
+
+#### `get_request_body(path, method)`
+
+Return the OpenAPI request body schema.
+
+#### `get_responses(path, method)`
+
+Return the OpenAPI responses schema.
+
+---
+
+## ManualSchema
+
+Manually define the schema for a view.
+
+```python
+from rest_framework.schemas import ManualSchema
+import coreapi
+
+schema = ManualSchema(
+    fields=[
+        coreapi.Field(
+            name='search',
+            required=False,
+            location='query',
+            description='Search term'
+        ),
+    ],
+    description='List of items matching search criteria'
+)
+
+class MyView(APIView):
+    schema = schema
+```
+
+### Constructor
+
+<ParamField path="fields" type="list" required>
+  List of `coreapi.Field` objects defining the schema
+</ParamField>
+
+<ParamField path="encoding" type="str">
+  The encoding for the request body
+</ParamField>
+
+<ParamField path="description" type="str">
+  Description for the endpoint
+</ParamField>
+
+---
+
+## DefaultSchema
+
+Simple schema with no introspection.
+
+```python
+from rest_framework.schemas.inspectors import DefaultSchema
+
+class MyView(APIView):
+    schema = DefaultSchema()
+```
+
+---
+
+## Example: Complete Setup
+
+### URLs Configuration
+
+```python
+from django.urls import path
+from rest_framework.schemas import get_schema_view
+
+schema_view = get_schema_view(
+    title='My API',
+    description='Complete API documentation',
+    version='1.0.0',
+    public=True,
+)
+
+urlpatterns = [
+    path('openapi/', schema_view, name='openapi-schema'),
+    # ... your API URLs
+]
+```
+
+### Custom AutoSchema
+
+```python
+from rest_framework.schemas.openapi import AutoSchema
+
+class CustomAutoSchema(AutoSchema):
+    def get_operation(self, path, method):
+        operation = super().get_operation(path, method)
+        # Add custom fields
+        operation['x-custom-field'] = 'custom-value'
+        return operation
+
+class MyView(APIView):
+    schema = CustomAutoSchema(tags=['custom'])
+```
+
+### Disable Schema for Specific View
+
+```python
+from rest_framework.views import APIView
+
+class MyView(APIView):
+    schema = None  # Exclude from schema generation
+```

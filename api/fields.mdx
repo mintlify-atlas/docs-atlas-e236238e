@@ -1,0 +1,673 @@
+---
+title: Serializer Fields
+description: API reference for Django REST Framework serializer field types
+---
+
+Serializer fields handle converting between primitive values and internal datatypes. They also deal with validating input values, as well as retrieving and setting the values from their parent objects.
+
+## Core Arguments
+
+All field types accept the following arguments:
+
+<ParamField path="read_only" type="bool" default="False">
+  Field is used for serialization but not deserialization.
+</ParamField>
+
+<ParamField path="write_only" type="bool" default="False">
+  Field is used for deserialization but not serialization.
+</ParamField>
+
+<ParamField path="required" type="bool" default="True">
+  Field must be present in input data during deserialization.
+</ParamField>
+
+<ParamField path="default" type="any">
+  Default value if no input is supplied. Can be a value or callable.
+</ParamField>
+
+<ParamField path="allow_null" type="bool" default="False">
+  Accept `None` as a valid value.
+</ParamField>
+
+<ParamField path="source" type="str">
+  Attribute name to use for populating the field. Use `'*'` for the entire object.
+</ParamField>
+
+<ParamField path="validators" type="list">
+  List of validator functions to apply to the field input.
+</ParamField>
+
+<ParamField path="error_messages" type="dict">
+  Dictionary of error codes to error messages.
+</ParamField>
+
+<ParamField path="label" type="str">
+  Short text string for HTML form fields.
+</ParamField>
+
+<ParamField path="help_text" type="str">
+  Description text for HTML form fields.
+</ParamField>
+
+<ParamField path="initial" type="any">
+  Value for pre-populating HTML form fields.
+</ParamField>
+
+<ParamField path="style" type="dict">
+  Key-value pairs to control renderer display.
+</ParamField>
+
+---
+
+## Boolean Fields
+
+### BooleanField
+
+A boolean representation.
+
+```python
+BooleanField()
+```
+
+**Valid inputs:** `True`, `False`, `'t'`, `'f'`, `'true'`, `'false'`, `'1'`, `'0'`, `1`, `0`, `'yes'`, `'no'`, `'on'`, `'off'`
+
+**Output:** `True` or `False`
+
+**Example:**
+```python
+is_active = serializers.BooleanField()
+```
+
+---
+
+## String Fields
+
+### CharField
+
+A text representation.
+
+```python
+CharField(
+    max_length=None,
+    min_length=None,
+    allow_blank=False,
+    trim_whitespace=True
+)
+```
+
+<ParamField path="max_length" type="int">
+  Maximum number of characters.
+</ParamField>
+
+<ParamField path="min_length" type="int">
+  Minimum number of characters.
+</ParamField>
+
+<ParamField path="allow_blank" type="bool" default="False">
+  Allow empty string as valid value.
+</ParamField>
+
+<ParamField path="trim_whitespace" type="bool" default="True">
+  Trim leading and trailing whitespace.
+</ParamField>
+
+**Example:**
+```python
+title = serializers.CharField(max_length=100)
+content = serializers.CharField(max_length=200, allow_blank=True)
+```
+
+### EmailField
+
+A text representation that validates email addresses.
+
+```python
+EmailField(max_length=None, min_length=None, allow_blank=False)
+```
+
+**Example:**
+```python
+email = serializers.EmailField()
+```
+
+### RegexField
+
+A text representation that validates against a regular expression.
+
+```python
+RegexField(regex, max_length=None, min_length=None, allow_blank=False)
+```
+
+<ParamField path="regex" type="str | Pattern" required>
+  Regular expression string or compiled pattern object.
+</ParamField>
+
+**Example:**
+```python
+phone = serializers.RegexField(regex=r'^\+?1?\d{9,15}$')
+```
+
+### SlugField
+
+Validates against the pattern `[a-zA-Z0-9_-]+`.
+
+```python
+SlugField(max_length=50, min_length=None, allow_blank=False, allow_unicode=False)
+```
+
+<ParamField path="allow_unicode" type="bool" default="False">
+  Allow Unicode letters in addition to ASCII.
+</ParamField>
+
+**Example:**
+```python
+slug = serializers.SlugField(max_length=100)
+```
+
+### URLField
+
+Validates fully qualified URLs.
+
+```python
+URLField(max_length=200, min_length=None, allow_blank=False)
+```
+
+**Example:**
+```python
+website = serializers.URLField()
+```
+
+### UUIDField
+
+Ensures input is a valid UUID string.
+
+```python
+UUIDField(format='hex_verbose')
+```
+
+<ParamField path="format" type="str" default="'hex_verbose'">
+  UUID format: `'hex_verbose'`, `'hex'`, `'int'`, or `'urn'`.
+</ParamField>
+
+**Example:**
+```python
+id = serializers.UUIDField(format='hex')
+```
+
+### FilePathField
+
+Choices limited to filenames in a directory.
+
+```python
+FilePathField(
+    path,
+    match=None,
+    recursive=False,
+    allow_files=True,
+    allow_folders=False
+)
+```
+
+<ParamField path="path" type="str" required>
+  Absolute filesystem path to directory.
+</ParamField>
+
+<ParamField path="match" type="str">
+  Regular expression to filter filenames.
+</ParamField>
+
+<ParamField path="recursive" type="bool" default="False">
+  Include all subdirectories.
+</ParamField>
+
+<ParamField path="allow_files" type="bool" default="True">
+  Include files in choices.
+</ParamField>
+
+<ParamField path="allow_folders" type="bool" default="False">
+  Include folders in choices.
+</ParamField>
+
+### IPAddressField
+
+Validates IPv4 or IPv6 addresses.
+
+```python
+IPAddressField(protocol='both', unpack_ipv4=False)
+```
+
+<ParamField path="protocol" type="str" default="'both'">
+  Accepted values: `'both'`, `'IPv4'`, or `'IPv6'`.
+</ParamField>
+
+<ParamField path="unpack_ipv4" type="bool" default="False">
+  Unpack IPv4 mapped addresses like `::ffff:192.0.2.1`.
+</ParamField>
+
+---
+
+## Numeric Fields
+
+### IntegerField
+
+An integer representation.
+
+```python
+IntegerField(max_value=None, min_value=None)
+```
+
+<ParamField path="max_value" type="int">
+  Maximum value allowed.
+</ParamField>
+
+<ParamField path="min_value" type="int">
+  Minimum value allowed.
+</ParamField>
+
+**Example:**
+```python
+age = serializers.IntegerField(min_value=0, max_value=150)
+```
+
+### BigIntegerField
+
+A biginteger representation.
+
+```python
+BigIntegerField(max_value=None, min_value=None, coerce_to_string=None)
+```
+
+<ParamField path="coerce_to_string" type="bool">
+  Return string values. Defaults to `COERCE_BIGINT_TO_STRING` setting.
+</ParamField>
+
+**Example:**
+```python
+large_number = serializers.BigIntegerField()
+```
+
+### FloatField
+
+A floating point representation.
+
+```python
+FloatField(max_value=None, min_value=None)
+```
+
+**Example:**
+```python
+price = serializers.FloatField(min_value=0.0)
+```
+
+### DecimalField
+
+A decimal representation.
+
+```python
+DecimalField(
+    max_digits,
+    decimal_places,
+    coerce_to_string=None,
+    max_value=None,
+    min_value=None,
+    localize=False,
+    rounding=None,
+    normalize_output=False
+)
+```
+
+<ParamField path="max_digits" type="int" required>
+  Maximum number of digits allowed.
+</ParamField>
+
+<ParamField path="decimal_places" type="int" required>
+  Number of decimal places to store.
+</ParamField>
+
+<ParamField path="coerce_to_string" type="bool">
+  Return string values. Defaults to `COERCE_DECIMAL_TO_STRING` setting.
+</ParamField>
+
+<ParamField path="max_value" type="int | Decimal">
+  Maximum value allowed.
+</ParamField>
+
+<ParamField path="min_value" type="int | Decimal">
+  Minimum value allowed.
+</ParamField>
+
+<ParamField path="localize" type="bool" default="False">
+  Enable localization of input and output.
+</ParamField>
+
+<ParamField path="rounding" type="str">
+  Decimal rounding mode.
+</ParamField>
+
+<ParamField path="normalize_output" type="bool" default="False">
+  Strip trailing zeros from output.
+</ParamField>
+
+**Example:**
+```python
+price = serializers.DecimalField(max_digits=5, decimal_places=2)
+```
+
+---
+
+## Date and Time Fields
+
+### DateTimeField
+
+A date and time representation.
+
+```python
+DateTimeField(
+    format=empty,
+    input_formats=None,
+    default_timezone=None
+)
+```
+
+<ParamField path="format" type="str">
+  Output format: strftime string or `'iso-8601'`. Defaults to `DATETIME_FORMAT` setting.
+</ParamField>
+
+<ParamField path="input_formats" type="list">
+  List of input format strings. Defaults to `DATETIME_INPUT_FORMATS` setting.
+</ParamField>
+
+<ParamField path="default_timezone" type="tzinfo">
+  Timezone for naive datetimes. Defaults to current timezone if `USE_TZ` is enabled.
+</ParamField>
+
+**Example:**
+```python
+created = serializers.DateTimeField()
+timestamp = serializers.DateTimeField(format='%Y-%m-%d %H:%M:%S')
+```
+
+### DateField
+
+A date representation.
+
+```python
+DateField(format=empty, input_formats=None)
+```
+
+**Example:**
+```python
+birthday = serializers.DateField()
+```
+
+### TimeField
+
+A time representation.
+
+```python
+TimeField(format=empty, input_formats=None)
+```
+
+**Example:**
+```python
+meeting_time = serializers.TimeField()
+```
+
+### DurationField
+
+A duration representation.
+
+```python
+DurationField(format=empty, max_value=None, min_value=None)
+```
+
+<ParamField path="format" type="str">
+  Output format: `'iso-8601'` or `'django'`. Defaults to `DURATION_FORMAT` setting.
+</ParamField>
+
+**Example:**
+```python
+video_length = serializers.DurationField()
+```
+
+---
+
+## Choice Fields
+
+### ChoiceField
+
+Accepts a value from a limited set of choices.
+
+```python
+ChoiceField(choices, allow_blank=False, html_cutoff=None, html_cutoff_text=None)
+```
+
+<ParamField path="choices" type="list" required>
+  List of valid values or `(key, display_name)` tuples.
+</ParamField>
+
+<ParamField path="allow_blank" type="bool" default="False">
+  Allow empty string as valid value.
+</ParamField>
+
+<ParamField path="html_cutoff" type="int">
+  Maximum choices displayed in HTML select.
+</ParamField>
+
+<ParamField path="html_cutoff_text" type="str">
+  Text indicator for cutoff choices.
+</ParamField>
+
+**Example:**
+```python
+status = serializers.ChoiceField(choices=['draft', 'published', 'archived'])
+```
+
+### MultipleChoiceField
+
+Accepts a list of values from a set of choices.
+
+```python
+MultipleChoiceField(choices, allow_blank=False, html_cutoff=None, html_cutoff_text=None)
+```
+
+**Example:**
+```python
+tags = serializers.MultipleChoiceField(choices=['python', 'django', 'rest'])
+```
+
+---
+
+## File Upload Fields
+
+### FileField
+
+A file representation.
+
+```python
+FileField(max_length=None, allow_empty_file=False, use_url=True)
+```
+
+<ParamField path="max_length" type="int">
+  Maximum length for filename.
+</ParamField>
+
+<ParamField path="allow_empty_file" type="bool" default="False">
+  Allow empty files.
+</ParamField>
+
+<ParamField path="use_url" type="bool" default="True">
+  Use URL strings in output representation.
+</ParamField>
+
+**Example:**
+```python
+document = serializers.FileField()
+```
+
+### ImageField
+
+An image representation with validation.
+
+```python
+ImageField(max_length=None, allow_empty_file=False, use_url=True)
+```
+
+Requires Pillow library.
+
+**Example:**
+```python
+profile_picture = serializers.ImageField()
+```
+
+---
+
+## Composite Fields
+
+### ListField
+
+Validates a list of objects.
+
+```python
+ListField(child=None, allow_empty=True, min_length=None, max_length=None)
+```
+
+<ParamField path="child" type="Field">
+  Field instance for validating list items.
+</ParamField>
+
+<ParamField path="allow_empty" type="bool" default="True">
+  Allow empty lists.
+</ParamField>
+
+<ParamField path="min_length" type="int">
+  Minimum number of elements.
+</ParamField>
+
+<ParamField path="max_length" type="int">
+  Maximum number of elements.
+</ParamField>
+
+**Example:**
+```python
+scores = serializers.ListField(
+    child=serializers.IntegerField(min_value=0, max_value=100)
+)
+```
+
+### DictField
+
+Validates a dictionary of objects.
+
+```python
+DictField(child=None, allow_empty=True)
+```
+
+<ParamField path="child" type="Field">
+  Field instance for validating dictionary values.
+</ParamField>
+
+**Example:**
+```python
+metadata = serializers.DictField(child=serializers.CharField())
+```
+
+### HStoreField
+
+PostgreSQL HStore field.
+
+```python
+HStoreField(child=None, allow_empty=True)
+```
+
+**Example:**
+```python
+attributes = serializers.HStoreField()
+```
+
+### JSONField
+
+Validates JSON primitives.
+
+```python
+JSONField(binary=False, encoder=None)
+```
+
+<ParamField path="binary" type="bool" default="False">
+  Output JSON-encoded string instead of primitive data.
+</ParamField>
+
+<ParamField path="encoder" type="JSONEncoder">
+  Custom JSON encoder class.
+</ParamField>
+
+**Example:**
+```python
+config = serializers.JSONField()
+```
+
+---
+
+## Miscellaneous Fields
+
+### ReadOnlyField
+
+Returns field value without modification.
+
+```python
+ReadOnlyField()
+```
+
+**Example:**
+```python
+owner_name = serializers.ReadOnlyField(source='owner.username')
+```
+
+### HiddenField
+
+Takes value from default or callable, not user input.
+
+```python
+HiddenField(default=None)
+```
+
+**Example:**
+```python
+modified = serializers.HiddenField(default=timezone.now)
+```
+
+### ModelField
+
+Delegates to an arbitrary Django model field.
+
+```python
+ModelField(model_field=None)
+```
+
+**Example:**
+```python
+field = serializers.ModelField(
+    model_field=MyModel()._meta.get_field('custom_field')
+)
+```
+
+### SerializerMethodField
+
+Read-only field that calls a method on the serializer.
+
+```python
+SerializerMethodField(method_name=None)
+```
+
+<ParamField path="method_name" type="str">
+  Method name to call. Defaults to `get_<field_name>`.
+</ParamField>
+
+**Example:**
+```python
+class UserSerializer(serializers.ModelSerializer):
+    days_since_joined = serializers.SerializerMethodField()
+
+    def get_days_since_joined(self, obj):
+        return (now() - obj.date_joined).days
+```

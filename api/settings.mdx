@@ -1,0 +1,588 @@
+---
+title: Settings
+description: Complete API reference for Django REST Framework settings
+---
+
+All REST Framework settings are namespaced under the `REST_FRAMEWORK` dictionary in your Django settings.
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+    ],
+}
+```
+
+## API Policy Settings
+
+Settings that control basic API policies applied to all views.
+
+### DEFAULT_RENDERER_CLASSES
+
+<ParamField path="DEFAULT_RENDERER_CLASSES" type="list">
+  List of renderer classes for returning responses.
+  
+  Default:
+  ```python
+  [
+      'rest_framework.renderers.JSONRenderer',
+      'rest_framework.renderers.BrowsableAPIRenderer',
+  ]
+  ```
+</ParamField>
+
+### DEFAULT_PARSER_CLASSES
+
+<ParamField path="DEFAULT_PARSER_CLASSES" type="list">
+  List of parser classes for parsing request data.
+  
+  Default:
+  ```python
+  [
+      'rest_framework.parsers.JSONParser',
+      'rest_framework.parsers.FormParser',
+      'rest_framework.parsers.MultiPartParser'
+  ]
+  ```
+</ParamField>
+
+### DEFAULT_AUTHENTICATION_CLASSES
+
+<ParamField path="DEFAULT_AUTHENTICATION_CLASSES" type="list">
+  List of authentication classes.
+  
+  Default:
+  ```python
+  [
+      'rest_framework.authentication.SessionAuthentication',
+      'rest_framework.authentication.BasicAuthentication'
+  ]
+  ```
+</ParamField>
+
+### DEFAULT_PERMISSION_CLASSES
+
+<ParamField path="DEFAULT_PERMISSION_CLASSES" type="list">
+  List of permission classes. All classes must grant permission.
+  
+  Default:
+  ```python
+  [
+      'rest_framework.permissions.AllowAny',
+  ]
+  ```
+</ParamField>
+
+### DEFAULT_THROTTLE_CLASSES
+
+<ParamField path="DEFAULT_THROTTLE_CLASSES" type="list">
+  List of throttle classes.
+  
+  Default: `[]`
+</ParamField>
+
+### DEFAULT_CONTENT_NEGOTIATION_CLASS
+
+<ParamField path="DEFAULT_CONTENT_NEGOTIATION_CLASS" type="str">
+  Content negotiation class for selecting renderers.
+  
+  Default: `'rest_framework.negotiation.DefaultContentNegotiation'`
+</ParamField>
+
+### DEFAULT_METADATA_CLASS
+
+<ParamField path="DEFAULT_METADATA_CLASS" type="str">
+  Metadata class for OPTIONS requests.
+  
+  Default: `'rest_framework.metadata.SimpleMetadata'`
+</ParamField>
+
+### DEFAULT_VERSIONING_CLASS
+
+<ParamField path="DEFAULT_VERSIONING_CLASS" type="str">
+  Versioning class for API versioning.
+  
+  Default: `None`
+</ParamField>
+
+### DEFAULT_SCHEMA_CLASS
+
+<ParamField path="DEFAULT_SCHEMA_CLASS" type="str">
+  Schema class for automatic schema generation.
+  
+  Default: `'rest_framework.schemas.openapi.AutoSchema'`
+</ParamField>
+
+---
+
+## Generic View Settings
+
+Settings that control generic view behavior.
+
+### DEFAULT_PAGINATION_CLASS
+
+<ParamField path="DEFAULT_PAGINATION_CLASS" type="str">
+  Default pagination class for list views.
+  
+  Default: `None` (pagination disabled)
+</ParamField>
+
+### DEFAULT_FILTER_BACKENDS
+
+<ParamField path="DEFAULT_FILTER_BACKENDS" type="list">
+  List of filter backend classes.
+  
+  Default: `[]`
+</ParamField>
+
+---
+
+## Pagination Settings
+
+### PAGE_SIZE
+
+<ParamField path="PAGE_SIZE" type="int">
+  Default page size for pagination.
+  
+  Default: `None` (pagination disabled)
+</ParamField>
+
+---
+
+## Filtering Settings
+
+### SEARCH_PARAM
+
+<ParamField path="SEARCH_PARAM" type="str">
+  Query parameter name for SearchFilter.
+  
+  Default: `'search'`
+</ParamField>
+
+### ORDERING_PARAM
+
+<ParamField path="ORDERING_PARAM" type="str">
+  Query parameter name for OrderingFilter.
+  
+  Default: `'ordering'`
+</ParamField>
+
+---
+
+## Versioning Settings
+
+### DEFAULT_VERSION
+
+<ParamField path="DEFAULT_VERSION" type="str">
+  Default version when no version is specified.
+  
+  Default: `None`
+</ParamField>
+
+### ALLOWED_VERSIONS
+
+<ParamField path="ALLOWED_VERSIONS" type="list">
+  Set of allowed API versions.
+  
+  Default: `None` (all versions allowed)
+</ParamField>
+
+### VERSION_PARAM
+
+<ParamField path="VERSION_PARAM" type="str">
+  Parameter name for versioning.
+  
+  Default: `'version'`
+</ParamField>
+
+---
+
+## Authentication Settings
+
+### UNAUTHENTICATED_USER
+
+<ParamField path="UNAUTHENTICATED_USER" type="str">
+  Class for `request.user` in unauthenticated requests.
+  
+  Default: `'django.contrib.auth.models.AnonymousUser'`
+</ParamField>
+
+### UNAUTHENTICATED_TOKEN
+
+<ParamField path="UNAUTHENTICATED_TOKEN" type="str">
+  Class for `request.auth` in unauthenticated requests.
+  
+  Default: `None`
+</ParamField>
+
+---
+
+## View Settings
+
+### VIEW_NAME_FUNCTION
+
+<ParamField path="VIEW_NAME_FUNCTION" type="str">
+  Function to generate view names.
+  
+  Default: `'rest_framework.views.get_view_name'`
+</ParamField>
+
+### VIEW_DESCRIPTION_FUNCTION
+
+<ParamField path="VIEW_DESCRIPTION_FUNCTION" type="str">
+  Function to generate view descriptions.
+  
+  Default: `'rest_framework.views.get_view_description'`
+</ParamField>
+
+---
+
+## Exception Handling Settings
+
+### EXCEPTION_HANDLER
+
+<ParamField path="EXCEPTION_HANDLER" type="str">
+  Function to handle exceptions.
+  
+  Default: `'rest_framework.views.exception_handler'`
+</ParamField>
+
+### NON_FIELD_ERRORS_KEY
+
+<ParamField path="NON_FIELD_ERRORS_KEY" type="str">
+  Key for non-field errors in validation errors.
+  
+  Default: `'non_field_errors'`
+</ParamField>
+
+---
+
+## Testing Settings
+
+### TEST_REQUEST_DEFAULT_FORMAT
+
+<ParamField path="TEST_REQUEST_DEFAULT_FORMAT" type="str">
+  Default format for test requests.
+  
+  Default: `'multipart'`
+</ParamField>
+
+### TEST_REQUEST_RENDERER_CLASSES
+
+<ParamField path="TEST_REQUEST_RENDERER_CLASSES" type="list">
+  Available renderer classes for test requests.
+  
+  Default:
+  ```python
+  [
+      'rest_framework.renderers.MultiPartRenderer',
+      'rest_framework.renderers.JSONRenderer'
+  ]
+  ```
+</ParamField>
+
+---
+
+## Hyperlink Settings
+
+### URL_FORMAT_OVERRIDE
+
+<ParamField path="URL_FORMAT_OVERRIDE" type="str">
+  Query parameter name for format override.
+  
+  Default: `'format'`
+</ParamField>
+
+### FORMAT_SUFFIX_KWARG
+
+<ParamField path="FORMAT_SUFFIX_KWARG" type="str">
+  URL keyword argument name for format suffix.
+  
+  Default: `'format'`
+</ParamField>
+
+### URL_FIELD_NAME
+
+<ParamField path="URL_FIELD_NAME" type="str">
+  Field name for URL fields in HyperlinkedModelSerializer.
+  
+  Default: `'url'`
+</ParamField>
+
+---
+
+## Format Settings
+
+### DATE_FORMAT
+
+<ParamField path="DATE_FORMAT" type="str">
+  Output format for DateField serialization.
+  
+  Default: `'iso-8601'` (ISO 8601 format)
+  
+  Use Python strftime format strings or the special value `'iso-8601'`.
+</ParamField>
+
+### DATE_INPUT_FORMATS
+
+<ParamField path="DATE_INPUT_FORMATS" type="list">
+  Input formats for DateField parsing.
+  
+  Default: `['iso-8601']`
+</ParamField>
+
+### DATETIME_FORMAT
+
+<ParamField path="DATETIME_FORMAT" type="str">
+  Output format for DateTimeField serialization.
+  
+  Default: `'iso-8601'`
+</ParamField>
+
+### DATETIME_INPUT_FORMATS
+
+<ParamField path="DATETIME_INPUT_FORMATS" type="list">
+  Input formats for DateTimeField parsing.
+  
+  Default: `['iso-8601']`
+</ParamField>
+
+### TIME_FORMAT
+
+<ParamField path="TIME_FORMAT" type="str">
+  Output format for TimeField serialization.
+  
+  Default: `'iso-8601'`
+</ParamField>
+
+### TIME_INPUT_FORMATS
+
+<ParamField path="TIME_INPUT_FORMATS" type="list">
+  Input formats for TimeField parsing.
+  
+  Default: `['iso-8601']`
+</ParamField>
+
+### DURATION_FORMAT
+
+<ParamField path="DURATION_FORMAT" type="str">
+  Output format for DurationField serialization.
+  
+  Default: `'django-duration'` (Django's duration string format)
+  
+  Possible values: `'django-duration'`, `'iso-8601'`
+</ParamField>
+
+---
+
+## Encoding Settings
+
+### UNICODE_JSON
+
+<ParamField path="UNICODE_JSON" type="bool">
+  Render JSON with unicode characters instead of escaped sequences.
+  
+  Default: `True`
+</ParamField>
+
+### COMPACT_JSON
+
+<ParamField path="COMPACT_JSON" type="bool">
+  Render compact JSON (no extra whitespace).
+  
+  Default: `True`
+</ParamField>
+
+### STRICT_JSON
+
+<ParamField path="STRICT_JSON" type="bool">
+  Use strict JSON encoding (reject NaN and Infinity).
+  
+  Default: `True`
+</ParamField>
+
+### COERCE_DECIMAL_TO_STRING
+
+<ParamField path="COERCE_DECIMAL_TO_STRING" type="bool">
+  Render Decimal values as strings instead of floats.
+  
+  Default: `True`
+</ParamField>
+
+### COERCE_BIGINT_TO_STRING
+
+<ParamField path="COERCE_BIGINT_TO_STRING" type="bool">
+  Render large integers (>53 bits) as strings to prevent precision loss in JavaScript.
+  
+  Default: `False`
+</ParamField>
+
+### UPLOADED_FILES_USE_URL
+
+<ParamField path="UPLOADED_FILES_USE_URL" type="bool">
+  Use URL representation for file fields instead of file name.
+  
+  Default: `True`
+</ParamField>
+
+---
+
+## Browsable API Settings
+
+### HTML_SELECT_CUTOFF
+
+<ParamField path="HTML_SELECT_CUTOFF" type="int">
+  Maximum number of items to display in select dropdowns in browsable API.
+  
+  Default: `1000`
+</ParamField>
+
+### HTML_SELECT_CUTOFF_TEXT
+
+<ParamField path="HTML_SELECT_CUTOFF_TEXT" type="str">
+  Text to display when select cutoff is reached.
+  
+  Default: `"More than {count} items..."`
+</ParamField>
+
+---
+
+## Throttling Settings
+
+### DEFAULT_THROTTLE_RATES
+
+<ParamField path="DEFAULT_THROTTLE_RATES" type="dict">
+  Default throttle rates for throttle classes.
+  
+  Default:
+  ```python
+  {
+      'user': None,
+      'anon': None,
+  }
+  ```
+  
+  Rates use the format `'number/period'`, e.g.:
+  - `'100/hour'`
+  - `'1000/day'`
+  - `'5/second'`
+</ParamField>
+
+### NUM_PROXIES
+
+<ParamField path="NUM_PROXIES" type="int">
+  Number of proxies in front of the API for throttling IP address detection.
+  
+  Default: `None`
+</ParamField>
+
+---
+
+## Schema Settings
+
+### SCHEMA_COERCE_PATH_PK
+
+<ParamField path="SCHEMA_COERCE_PATH_PK" type="bool">
+  Coerce path `pk` parameters to use `{id}` in schema generation.
+  
+  Default: `True`
+</ParamField>
+
+### SCHEMA_COERCE_METHOD_NAMES
+
+<ParamField path="SCHEMA_COERCE_METHOD_NAMES" type="dict">
+  Mapping of viewset method names to schema method names.
+  
+  Default:
+  ```python
+  {
+      'retrieve': 'read',
+      'destroy': 'delete'
+  }
+  ```
+</ParamField>
+
+---
+
+## Accessing Settings
+
+Access settings using the `api_settings` object:
+
+```python
+from rest_framework.settings import api_settings
+
+print(api_settings.DEFAULT_AUTHENTICATION_CLASSES)
+print(api_settings.PAGE_SIZE)
+```
+
+---
+
+## Example Configuration
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    # Renderers
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    
+    # Parsers
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+    ],
+    
+    # Authentication
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    
+    # Permissions
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    
+    # Pagination
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 100,
+    
+    # Filtering
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
+    
+    # Throttling
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+    },
+    
+    # Versioning
+    'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.NamespaceVersioning',
+    'DEFAULT_VERSION': 'v1',
+    'ALLOWED_VERSIONS': ['v1', 'v2'],
+    
+    # Schema
+    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.openapi.AutoSchema',
+    
+    # Date/Time formats
+    'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
+    'DATE_FORMAT': '%Y-%m-%d',
+    
+    # Exception handling
+    'EXCEPTION_HANDLER': 'myapp.exceptions.custom_exception_handler',
+    
+    # Testing
+    'TEST_REQUEST_DEFAULT_FORMAT': 'json',
+}
+```

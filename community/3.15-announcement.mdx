@@ -1,0 +1,279 @@
+---
+title: Django REST Framework 3.15
+description: Release announcement for Django REST Framework version 3.15
+---
+
+# Django REST Framework 3.15
+
+<Info>
+Released on March 15th, 2024 with 176 commits by 138 authors
+</Info>
+
+At the Internet, on March 15th, 2024, with 176 commits by 138 authors, we are happy to announce the release of Django REST framework 3.15.
+
+## Django 5.0 and Python 3.12 Support
+
+The latest release now fully supports Django 5.0 and Python 3.12.
+
+<CardGroup cols={2}>
+  <Card title="Django Support" icon="django">
+    Minimum: Django 3.0  
+    Latest: Django 5.0
+  </Card>
+  
+  <Card title="Python Support" icon="python">
+    Minimum: Python 3.6  
+    Latest: Python 3.12
+  </Card>
+</CardGroup>
+
+## Primary Support of UniqueConstraint
+
+`ModelSerializer` now generates validators for [UniqueConstraint](https://docs.djangoproject.com/en/4.0/ref/models/constraints/#uniqueconstraint), including both `UniqueValidator` and `UniqueTogetherValidator`.
+
+### Example
+
+```python
+from django.db import models
+
+class Product(models.Model):
+    name = models.CharField(max_length=100)
+    sku = models.CharField(max_length=50)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sku'],
+                name='unique_sku'
+            )
+        ]
+```
+
+The serializer will automatically generate the appropriate validators:
+
+```python
+from rest_framework import serializers
+
+class ProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['name', 'sku']
+    # Validators for UniqueConstraint are automatically generated!
+```
+
+## SimpleRouter Non-Regex Matching Support
+
+By default the URLs created by `SimpleRouter` use regular expressions. This behavior can be modified by setting the `use_regex_path` argument to `False` when instantiating the router.
+
+<CodeGroup>
+```python Traditional (Regex)
+from rest_framework.routers import SimpleRouter
+
+router = SimpleRouter()  # Uses regex by default
+router.register(r'users', UserViewSet)
+```
+
+```python New (Path Converters)
+from rest_framework.routers import SimpleRouter
+
+router = SimpleRouter(use_regex_path=False)  # Uses path converters
+router.register('users', UserViewSet)
+# Generates: path('users/', ...) instead of re_path(r'^users/$', ...)
+```
+</CodeGroup>
+
+<Tip>
+Using path converters instead of regex can make your URLs cleaner and more maintainable.
+</Tip>
+
+## ZoneInfo as the Primary Source of Timezone Data
+
+Dependency on `pytz` has been removed and deprecation warnings have been added. Django will provide ZoneInfo instances as long as `USE_DEPRECATED_PYTZ` is not enabled.
+
+<Warning>
+**Migration Required:**
+
+If you were using `pytz` directly in your code, you'll need to migrate to using ZoneInfo. More info on the migration can be found in [this guide](https://pytz-deprecation-shim.readthedocs.io/en/latest/migration.html).
+</Warning>
+
+### Example Migration
+
+<CodeGroup>
+```python Before (pytz)
+import pytz
+from datetime import datetime
+
+tz = pytz.timezone('America/New_York')
+aware_dt = tz.localize(datetime(2024, 3, 15, 12, 0, 0))
+```
+
+```python After (ZoneInfo)
+from zoneinfo import ZoneInfo
+from datetime import datetime
+
+tz = ZoneInfo('America/New_York')
+aware_dt = datetime(2024, 3, 15, 12, 0, 0, tzinfo=tz)
+```
+</CodeGroup>
+
+## Align SearchFilter Behavior to Django Admin Search
+
+Searches now may contain **quoted phrases** with spaces, where each phrase is considered as a single search term.
+
+### Example
+
+```python
+from rest_framework import filters
+
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['title', 'content']
+```
+
+Now you can search with:
+
+<CardGroup cols={2}>
+  <Card title="Simple Search" icon="magnifying-glass">
+    `/api/articles/?search=django`  
+    Searches for "django"
+  </Card>
+  
+  <Card title="Quoted Phrases" icon="quote-left">
+    `/api/articles/?search="django rest"`  
+    Searches for the exact phrase "django rest"
+  </Card>
+  
+  <Card title="Multiple Terms" icon="list">
+    `/api/articles/?search=django,python`  
+    Searches for "django" OR "python"
+  </Card>
+  
+  <Card title="Combined" icon="layer-group">
+    `/api/articles/?search="django rest",python`  
+    Searches for "django rest" OR "python"
+  </Card>
+</CardGroup>
+
+<Warning>
+The search will now raise a validation error if any null-character is provided in the search query.
+</Warning>
+
+See the [Filtering API guide](/api/filtering) for more information.
+
+## Browsable API Security Improvement
+
+The browsable API now uses **POST method** instead of GET to perform logout. This prevents CSRF attacks that could force users to log out.
+
+<Info>
+**Why this matters:**
+
+Using GET for state-changing operations (like logout) is a security anti-pattern. An attacker could create a malicious link that logs users out when clicked. Using POST prevents this attack vector.
+</Info>
+
+## Other Fixes and Improvements
+
+There are a number of fixes and minor improvements in this release:
+
+<AccordionGroup>
+  <Accordion title="Core Features">
+    - jQuery upgraded to 3.7.1
+    - Use `str` as default path converter
+    - Document support for `http.HTTPMethod` in `@action` decorator (Python 3.11+)
+    - Partial serializers should not have required fields
+    - Propagate 'default' from model field to serializer field
+    - Allow to override `child.run_validation` call in ListSerializer
+  </Accordion>
+  
+  <Accordion title="Bug Fixes">
+    - Fix choices in ChoiceField to support IntEnum
+    - Fix SearchFilter rendering search field with invalid value
+    - Fix OpenAPI Schema yaml rendering for `timedelta`
+    - Fix NamespaceVersioning ignoring DEFAULT_VERSION on non-None namespaces
+    - Fixes BrowsableAPIRenderer for usage with ListSerializer
+    - Fix URLPathVersioning reverse fallback
+  </Accordion>
+  
+  <Accordion title="Type Checking Support">
+    - Allow Request, Response, Field, and GenericAPIView to be subscriptable
+    - This enables making classes generic for type checking
+    - Example: `GenericAPIView[MyModel]`
+  </Accordion>
+  
+  <Accordion title="Schema Generation">
+    - Fix pagination response schemas
+    - Removed usage of `field.choices` that triggered full table load
+    - Handle Nested Relation in SlugRelatedField when many=False
+    - Use PrimaryKeyRelatedField pkfield in OpenAPI
+  </Accordion>
+  
+  <Accordion title="CSP Compatibility">
+    - Remove inline CSS
+    - Add CSP nonce where available
+    - Make browsable API compatible with strong CSP
+    - Avoid inline script execution for CSRF token injection
+  </Accordion>
+</AccordionGroup>
+
+## Complete Release Notes
+
+See the [release notes](/community/release-notes#315x-series) page for a complete listing of all changes.
+
+## Upgrading
+
+To upgrade to Django REST Framework 3.15:
+
+```bash
+pip install -U djangorestframework
+```
+
+<Warning>
+**Important Changes:**
+
+- If you're using `pytz`, migrate to ZoneInfo
+- Logout in browsable API now uses POST instead of GET
+- SearchFilter behavior has changed to support quoted phrases
+- Several deprecated features have been removed
+</Warning>
+
+## Community Growth
+
+This release represents significant community involvement:
+
+<CardGroup cols={3}>
+  <Card title="176 Commits" icon="code-commit">
+    Total commits in this release
+  </Card>
+  
+  <Card title="138 Authors" icon="users">
+    Contributors to this release
+  </Card>
+  
+  <Card title="Growing Ecosystem" icon="puzzle-piece">
+    Expanding third-party package support
+  </Card>
+</CardGroup>
+
+<Info>
+Thank you to all the contributors who made this release possible! Your contributions, whether code, documentation, or community support, are invaluable to the Django REST Framework project.
+</Info>
+
+## Links
+
+<CardGroup cols={2}>
+  <Card title="Full Changelog" href="https://github.com/encode/django-rest-framework/compare/3.14.0...3.15.0" icon="github">
+    View all changes on GitHub
+  </Card>
+  
+  <Card title="PyPI Release" href="https://pypi.org/project/djangorestframework/3.15.0/" icon="python">
+    Download from PyPI
+  </Card>
+  
+  <Card title="Migration Guide" href="https://pytz-deprecation-shim.readthedocs.io/en/latest/migration.html" icon="book">
+    PyTZ to ZoneInfo migration
+  </Card>
+  
+  <Card title="Discussion Group" href="https://groups.google.com/forum/#!forum/django-rest-framework" icon="comments">
+    Join the community
+  </Card>
+</CardGroup>

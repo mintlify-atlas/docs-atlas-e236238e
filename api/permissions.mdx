@@ -1,0 +1,403 @@
+---
+title: Permissions
+description: Permission classes for Django REST Framework
+---
+
+## Overview
+
+Permissions determine whether a request should be granted or denied access. Permission checks run at the start of the view, using authentication information in `request.user` and `request.auth`.
+
+Permissions are used to grant or deny access for different classes of users to different parts of the API.
+
+## Configuration
+
+### Global Settings
+
+Set permission policy globally using `DEFAULT_PERMISSION_CLASSES`:
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ]
+}
+```
+
+Default (if not specified):
+```python
+'DEFAULT_PERMISSION_CLASSES': [
+   'rest_framework.permissions.AllowAny',
+]
+```
+
+### Per-View Settings
+
+Set permissions on individual views:
+
+```python
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+
+class ExampleView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'status': 'request was permitted'})
+```
+
+Or with function-based views:
+
+```python
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def example_view(request):
+    return Response({'status': 'request was permitted'})
+```
+
+### Composing Permissions
+
+Combine permissions using bitwise operators:
+
+```python
+from rest_framework.permissions import BasePermission, IsAuthenticated, SAFE_METHODS
+
+class ReadOnly(BasePermission):
+    def has_permission(self, request, view):
+        return request.method in SAFE_METHODS
+
+class ExampleView(APIView):
+    permission_classes = [IsAuthenticated | ReadOnly]
+```
+
+**Operators:**
+- `&` (AND) - Both permissions must pass
+- `|` (OR) - Either permission must pass
+- `~` (NOT) - Inverts permission result
+- `( )` - Groups expressions
+
+## Base Classes
+
+### BasePermission
+
+All permission classes extend `BasePermission`.
+
+```python
+class BasePermission:
+    def has_permission(self, request, view):
+        """
+        Return True if permission is granted, False otherwise.
+        Called before the view executes.
+        """
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        """
+        Return True if permission is granted, False otherwise.
+        Called when accessing a specific object.
+        """
+        return True
+```
+
+## Built-in Permission Classes
+
+### AllowAny
+
+Allows unrestricted access, regardless of authentication.
+
+```python
+from rest_framework.permissions import AllowAny
+
+class PublicView(APIView):
+    permission_classes = [AllowAny]
+```
+
+This is equivalent to using an empty list, but makes the intention explicit.
+
+### IsAuthenticated
+
+Denies access to unauthenticated users, allows access to authenticated users.
+
+```python
+from rest_framework.permissions import IsAuthenticated
+
+class PrivateView(APIView):
+    permission_classes = [IsAuthenticated]
+```
+
+Suitable for APIs that should only be accessible to registered users.
+
+### IsAdminUser
+
+Denies access unless `user.is_staff` is `True`.
+
+```python
+from rest_framework.permissions import IsAdminUser
+
+class AdminOnlyView(APIView):
+    permission_classes = [IsAdminUser]
+```
+
+Suitable for APIs that should only be accessible to trusted administrators.
+
+### IsAuthenticatedOrReadOnly
+
+Allows authenticated users to perform any request. Unauthenticated users can only perform safe methods (GET, HEAD, OPTIONS).
+
+```python
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+
+class BlogPostView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+```
+
+Suitable for APIs that allow read access to anonymous users but require authentication for modifications.
+
+### DjangoModelPermissions
+
+Ties into Django's standard `django.contrib.auth` model permissions. Must be applied to views with a `.queryset` property or `get_queryset()` method.
+
+```python
+from rest_framework.permissions import DjangoModelPermissions
+
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    permission_classes = [DjangoModelPermissions]
+```
+
+**Required Permissions:**
+- POST - `add` permission
+- PUT/PATCH - `change` permission  
+- DELETE - `delete` permission
+- GET/OPTIONS/HEAD - No permission required (by default)
+
+**Attributes:**
+
+<ParamField path="perms_map" type="dict">
+  Maps HTTP methods to required permission codes
+  
+  ```python
+  perms_map = {
+      'GET': [],
+      'OPTIONS': [],
+      'HEAD': [],
+      'POST': ['%(app_label)s.add_%(model_name)s'],
+      'PUT': ['%(app_label)s.change_%(model_name)s'],
+      'PATCH': ['%(app_label)s.change_%(model_name)s'],
+      'DELETE': ['%(app_label)s.delete_%(model_name)s'],
+  }
+  ```
+</ParamField>
+
+<ParamField path="authenticated_users_only" type="bool" default="True">
+  Whether to require authentication
+</ParamField>
+
+**Customization:**
+
+```python
+class CustomModelPermissions(DjangoModelPermissions):
+    perms_map = {
+        'GET': ['%(app_label)s.view_%(model_name)s'],
+        'POST': ['%(app_label)s.add_%(model_name)s'],
+        'PUT': ['%(app_label)s.change_%(model_name)s'],
+        'PATCH': ['%(app_label)s.change_%(model_name)s'],
+        'DELETE': ['%(app_label)s.delete_%(model_name)s'],
+    }
+```
+
+### DjangoModelPermissionsOrAnonReadOnly
+
+Similar to `DjangoModelPermissions`, but allows unauthenticated users read-only access.
+
+```python
+from rest_framework.permissions import DjangoModelPermissionsOrAnonReadOnly
+
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    permission_classes = [DjangoModelPermissionsOrAnonReadOnly]
+```
+
+**Attributes:**
+
+<ParamField path="authenticated_users_only" type="bool" default="False">
+  Set to False to allow anonymous read access
+</ParamField>
+
+### DjangoObjectPermissions
+
+Ties into Django's object-level permissions framework. Requires an object-permissions-enabled backend like django-guardian.
+
+```python
+from rest_framework.permissions import DjangoObjectPermissions
+
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    permission_classes = [DjangoObjectPermissions]
+```
+
+**Required Permissions:**
+- POST - `add` permission on model instance
+- PUT/PATCH - `change` permission on model instance
+- DELETE - `delete` permission on model instance
+- GET/OPTIONS/HEAD - No permission required (by default)
+
+**Attributes:**
+
+<ParamField path="perms_map" type="dict">
+  Maps HTTP methods to required object-level permission codes
+  
+  ```python
+  perms_map = {
+      'GET': [],
+      'OPTIONS': [],
+      'HEAD': [],
+      'POST': ['%(app_label)s.add_%(model_name)s'],
+      'PUT': ['%(app_label)s.change_%(model_name)s'],
+      'PATCH': ['%(app_label)s.change_%(model_name)s'],
+      'DELETE': ['%(app_label)s.delete_%(model_name)s'],
+  }
+  ```
+</ParamField>
+
+## Object-Level Permissions
+
+Object-level permissions determine if a user should be allowed to act on a particular object (typically a model instance).
+
+Run by generic views when `.get_object()` is called. If permission is denied, a `PermissionDenied` exception is raised.
+
+### Enforcing Object Permissions
+
+In custom views, explicitly call `.check_object_permissions()`:
+
+```python
+def get_object(self):
+    obj = get_object_or_404(self.get_queryset(), pk=self.kwargs["pk"])
+    self.check_object_permissions(self.request, obj)
+    return obj
+```
+
+### Limitations
+
+<Warning>
+Generic views don't automatically apply object-level permissions to each instance when returning a list of objects (for performance reasons).
+</Warning>
+
+When using object-level permissions, you should also filter the queryset appropriately:
+
+```python
+def get_queryset(self):
+    return Article.objects.filter(owner=self.request.user)
+```
+
+Object-level permissions are **not applied** when creating objects. Implement permission checks in your Serializer class or override `perform_create()`.
+
+## Custom Permissions
+
+Implement custom permissions by overriding `BasePermission`:
+
+```python
+from rest_framework import permissions
+
+class IsOwnerOrReadOnly(permissions.BasePermission):
+    """
+    Object-level permission to only allow owners to edit.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        # Read permissions allowed for any request
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # Write permissions only for owner
+        return obj.owner == request.user
+```
+
+### Custom Error Messages
+
+Override `message` and `code` attributes:
+
+```python
+class CustomerAccessPermission(permissions.BasePermission):
+    message = 'Adding customers not allowed.'
+    code = 'customer_access_denied'
+
+    def has_permission(self, request, view):
+        return request.user.has_perm('app.add_customer')
+```
+
+### IP Blocklist Example
+
+```python
+class BlocklistPermission(permissions.BasePermission):
+    """
+    Global permission check for blocked IPs.
+    """
+
+    def has_permission(self, request, view):
+        ip_addr = request.META['REMOTE_ADDR']
+        blocked = Blocklist.objects.filter(ip_addr=ip_addr).exists()
+        return not blocked
+```
+
+## Constants
+
+<ParamField path="SAFE_METHODS" type="tuple">
+  HTTP methods considered safe (read-only)
+  
+  ```python
+  SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
+  ```
+</ParamField>
+
+## Response Codes
+
+### 403 Forbidden
+
+Returned when:
+- Request is authenticated but permission is denied
+- Request is unauthenticated and authentication scheme doesn't use `WWW-Authenticate` headers
+
+### 401 Unauthorized
+
+Returned when:
+- Request is unauthenticated and authentication scheme uses `WWW-Authenticate` headers
+
+## Access Restriction Methods
+
+Three methods to customize access restrictions:
+
+| Method | Scope | When Applied |
+|--------|-------|-------------|
+| `queryset` / `get_queryset()` | Limits object visibility | list, retrieve, update, destroy |
+| `permission_classes` / `get_permissions()` | General permission checks | All actions |
+| `serializer_class` / `get_serializer()` | Instance-level restrictions | All actions |
+
+### Comparison Table
+
+|                                    | queryset | permission_classes | serializer_class |
+|------------------------------------|----------|--------------------|-----------------|
+| Action: list                       | global   | global             | object-level*   |
+| Action: create                     | no       | global             | object-level    |
+| Action: retrieve                   | global   | object-level       | object-level    |
+| Action: update                     | global   | object-level       | object-level    |
+| Action: partial_update             | global   | object-level       | object-level    |
+| Action: destroy                    | global   | object-level       | no              |
+| Can reference action in decision   | no**     | yes                | no**            |
+| Can reference request in decision  | no**     | yes                | yes             |
+
+\* Serializer should not raise PermissionDenied in list actions  
+\*\* `get_*()` methods have access to the current view and can return different instances based on request/action
+
+## Third-Party Packages
+
+- **DRF - Access Policy** - Declarative policy classes in JSON format
+- **Composed Permissions** - Complex multi-depth permission objects
+- **REST Condition** - Combine permissions with logical operators
+- **DRY Rest Permissions** - Different permissions per action
+- **Django REST Framework Roles** - Parameterize API over user types
+- **Django REST Framework API Key** - API key authorization for machines
+- **DRF PSQ** - Action-based permission_classes, serializer_class, and queryset
+- **Axioms DRF PY** - JWT-based fine-grained authorization with OAuth2/OIDC

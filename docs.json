@@ -1,122 +1,165 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Django REST Framework",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#a40404",
+    "light": "#a40404",
+    "dark": "#a40404"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/favicon.png",
+  "logo": {
+    "light": "/logo-light.png",
+    "dark": "/logo-light.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/encode/django-rest-framework"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/encode/django-rest-framework"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Tutorial",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "tutorial/1-serialization",
+              "tutorial/2-requests-and-responses",
+              "tutorial/3-class-based-views",
+              "tutorial/4-authentication-and-permissions",
+              "tutorial/5-relationships-and-hyperlinked-apis",
+              "tutorial/6-viewsets-and-routers"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "concepts/architecture",
+              "concepts/serialization",
+              "concepts/views-and-viewsets",
+              "concepts/request-response-cycle"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Topics",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "topics/documenting-your-api",
+              "topics/browsable-api",
+              "topics/ajax-csrf-cors",
+              "topics/html-and-forms",
+              "topics/internationalization",
+              "topics/browser-enhancements",
+              "topics/rest-hypermedia-hateoas"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Views & ViewSets",
             "pages": [
-              "api-reference/introduction"
+              "api/views",
+              "api/generic-views",
+              "api/viewsets",
+              "api/routers"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Serializers",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/serializers",
+              "api/fields",
+              "api/relations",
+              "api/validators"
+            ]
+          },
+          {
+            "group": "Requests & Responses",
+            "pages": [
+              "api/requests",
+              "api/responses",
+              "api/status-codes",
+              "api/exceptions"
+            ]
+          },
+          {
+            "group": "Authentication & Permissions",
+            "pages": [
+              "api/authentication",
+              "api/permissions",
+              "api/throttling"
+            ]
+          },
+          {
+            "group": "Parsers & Renderers",
+            "pages": [
+              "api/parsers",
+              "api/renderers",
+              "api/content-negotiation"
+            ]
+          },
+          {
+            "group": "Additional Components",
+            "pages": [
+              "api/pagination",
+              "api/filtering",
+              "api/versioning",
+              "api/schemas",
+              "api/metadata",
+              "api/format-suffixes",
+              "api/reverse",
+              "api/caching",
+              "api/testing",
+              "api/settings"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Community",
+        "groups": [
+          {
+            "group": "Resources",
+            "pages": [
+              "community/tutorials-and-resources",
+              "community/third-party-packages"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "community/contributing",
+              "community/project-management"
+            ]
+          },
+          {
+            "group": "Release Notes",
+            "pages": [
+              "community/release-notes",
+              "community/3.16-announcement",
+              "community/3.15-announcement"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

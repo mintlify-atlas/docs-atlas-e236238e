@@ -1,0 +1,250 @@
+---
+title: 'Request'
+description: 'The Request class wraps Django HttpRequest with enhanced parsing and authentication'
+---
+
+The `Request` class extends Django's standard `HttpRequest`, adding support for flexible request parsing and authentication. It provides a richer API for handling REST-based web services.
+
+## Class Signature
+
+```python
+from rest_framework.request import Request
+
+Request(
+    request,
+    parsers=None,
+    authenticators=None,
+    negotiator=None,
+    parser_context=None
+)
+```
+
+<ParamField path="request" type="HttpRequest" required>
+  The original Django HttpRequest instance
+</ParamField>
+
+<ParamField path="parsers" type="list | tuple" default="()">
+  List of parser instances to use for parsing request content
+</ParamField>
+
+<ParamField path="authenticators" type="list | tuple" default="()">
+  List of authenticator instances to authenticate the request's user
+</ParamField>
+
+<ParamField path="negotiator" type="object" default="None">
+  Content negotiation class instance. Defaults to `DEFAULT_CONTENT_NEGOTIATION_CLASS`
+</ParamField>
+
+<ParamField path="parser_context" type="dict" default="None">
+  Dictionary of context information passed to parsers
+</ParamField>
+
+## Request Parsing
+
+The Request class provides flexible parsing that allows you to treat requests with JSON data or other media types the same way you handle form data.
+
+### .data
+
+```python
+request.data
+```
+
+Returns the parsed content of the request body. Similar to `request.POST` and `request.FILES` but with several advantages:
+
+- Includes all parsed content (file and non-file inputs)
+- Supports parsing HTTP methods other than POST (PUT, PATCH, etc.)
+- Supports flexible request parsing beyond just form data
+
+<ResponseField name="data" type="dict | list | QueryDict">
+  The parsed request data. Type depends on the content type and parser used.
+</ResponseField>
+
+<Warning>
+  Accessing `request.data` may raise `ParseError` if the client sends malformed content, or `UnsupportedMediaType` if the content type cannot be parsed.
+</Warning>
+
+### .query_params
+
+```python
+request.query_params
+```
+
+A more semantically correct name for `request.GET`. Returns the query parameters from the URL.
+
+<ResponseField name="query_params" type="QueryDict">
+  Dictionary-like object containing all query parameters. Identical to `request.GET`.
+</ResponseField>
+
+<Info>
+  Using `request.query_params` makes your code more obvious - any HTTP method can include query parameters, not just GET requests.
+</Info>
+
+### .parsers
+
+```python
+request.parsers
+```
+
+List of parser instances that will be used to parse the request content. Automatically set by `APIView` or `@api_view` based on `parser_classes` or `DEFAULT_PARSER_CLASSES` setting.
+
+### .stream
+
+```python
+request.stream
+```
+
+Returns a stream representing the content of the request body. You typically won't need to access this directly.
+
+<ResponseField name="stream" type="file-like object | None">
+  Stream object for reading request content, or None if content length is 0
+</ResponseField>
+
+## Authentication
+
+REST framework provides flexible, per-request authentication with support for multiple authentication policies.
+
+### .user
+
+```python
+request.user
+```
+
+Returns the user associated with the current request, as authenticated by the authentication classes.
+
+<ResponseField name="user" type="User | AnonymousUser">
+  Typically returns a `django.contrib.auth.models.User` instance. For unauthenticated requests, returns `AnonymousUser` (or `None` if `UNAUTHENTICATED_USER` is set to None).
+</ResponseField>
+
+```python
+# Example usage
+def my_view(request):
+    if request.user.is_authenticated:
+        return Response({'message': f'Hello, {request.user.username}'})
+    return Response({'message': 'Hello, guest'})
+```
+
+### .auth
+
+```python
+request.auth
+```
+
+Returns additional authentication context. The exact value depends on the authentication policy used.
+
+<ResponseField name="auth" type="any | None">
+  May be a token instance, JWT payload, or other authentication context. Returns `None` for unauthenticated requests.
+</ResponseField>
+
+```python
+# Example: Token authentication
+if request.auth:
+    print(f"Authenticated with token: {request.auth.key}")
+```
+
+### .authenticators
+
+```python
+request.authenticators
+```
+
+List of authentication instances used to authenticate the request. Automatically set by `APIView` or `@api_view`.
+
+### .successful_authenticator
+
+```python
+request.successful_authenticator
+```
+
+Returns the authentication instance class that successfully authenticated the request, or `None` if unauthenticated.
+
+<ResponseField name="successful_authenticator" type="BaseAuthentication | None">
+  The authenticator instance that authenticated this request
+</ResponseField>
+
+## Content Negotiation
+
+The request exposes properties that show the results of the content negotiation stage.
+
+### .accepted_renderer
+
+```python
+request.accepted_renderer
+```
+
+The renderer instance selected by content negotiation. Set automatically by `APIView`.
+
+### .accepted_media_type
+
+```python
+request.accepted_media_type
+```
+
+String representing the media type accepted by content negotiation.
+
+## Browser Enhancements
+
+### .method
+
+```python
+request.method
+```
+
+Returns the uppercased string representation of the request's HTTP method.
+
+<ResponseField name="method" type="str">
+  HTTP method name (GET, POST, PUT, PATCH, DELETE, etc.)
+</ResponseField>
+
+Browser-based PUT, PATCH, and DELETE forms are transparently supported through form overloading.
+
+### .content_type
+
+```python
+request.content_type
+```
+
+Returns the media type of the HTTP request's body, or an empty string if none was provided.
+
+<ResponseField name="content_type" type="str">
+  Media type string (e.g., "application/json", "multipart/form-data")
+</ResponseField>
+
+## Standard HttpRequest Attributes
+
+Since `Request` extends Django's `HttpRequest`, all standard attributes are available:
+
+- `request.META` - Request metadata dictionary
+- `request.session` - Session dictionary
+- `request.POST` - Form data (uses DRF parsing)
+- `request.FILES` - Uploaded files
+- `request.COOKIES` - Cookie dictionary
+- `request.path` - Request path
+- `request.get_full_path()` - Full path including query string
+
+## Example Usage
+
+```python
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+@api_view(['GET', 'POST'])
+def example_view(request):
+    # Access parsed data
+    if request.method == 'POST':
+        data = request.data
+        return Response({
+            'received': data,
+            'user': request.user.username,
+            'method': request.method
+        })
+    
+    # Access query parameters
+    search = request.query_params.get('search', '')
+    return Response({'search': search})
+```
+
+## See Also
+
+- [Parsers](/api/parsers) - Content parsing classes
+- [Authentication](/api/authentication) - Authentication schemes
+- [Response](/api/responses) - Response class

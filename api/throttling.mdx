@@ -1,0 +1,513 @@
+---
+title: Throttling
+description: Throttling classes for Django REST Framework
+---
+
+## Overview
+
+Throttling controls the rate of requests that clients can make to an API. Throttles indicate a temporary state and are used to implement rate limiting.
+
+Throttling is similar to permissions, but determines if a request should be authorized based on the rate of requests.
+
+<Warning>
+Application-level throttling is not a security measure. Malicious actors can spoof IP addresses. Use throttling for implementing business policies and basic protections against service over-use, not for security or DDoS protection.
+</Warning>
+
+## Configuration
+
+### Global Settings
+
+Set throttling policy globally using `DEFAULT_THROTTLE_CLASSES` and `DEFAULT_THROTTLE_RATES`:
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day'
+    }
+}
+```
+
+**Rate Format:**
+- Format: `number/period`
+- Periods: `s`, `m`, `h`, `d` (or `second`, `minute`, `hour`, `day`, `sec`, `min`, `hr`)
+- Examples: `100/day`, `60/min`, `1000/hour`
+
+### Per-View Settings
+
+Set throttling on individual views:
+
+```python
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
+
+class ExampleView(APIView):
+    throttle_classes = [UserRateThrottle]
+
+    def get(self, request):
+        return Response({'status': 'request was permitted'})
+```
+
+Or with function-based views:
+
+```python
+from rest_framework.decorators import throttle_classes
+
+@api_view(['GET'])
+@throttle_classes([UserRateThrottle])
+def example_view(request):
+    return Response({'status': 'request was permitted'})
+```
+
+### Per-Action Settings
+
+Set throttling for specific actions:
+
+```python
+from rest_framework.decorators import action
+
+class MyViewSet(viewsets.ModelViewSet):
+    @action(detail=True, methods=["post"], throttle_classes=[UserRateThrottle])
+    def example_action(self, request, pk=None):
+        return Response({'status': 'request was permitted'})
+```
+
+## Base Classes
+
+### BaseThrottle
+
+All throttle classes extend `BaseThrottle`.
+
+```python
+class BaseThrottle:
+    def allow_request(self, request, view):
+        """
+        Return True if request should be allowed, False otherwise.
+        """
+        raise NotImplementedError('.allow_request() must be overridden')
+
+    def get_ident(self, request):
+        """
+        Identify the machine making the request.
+        Uses X-Forwarded-For if present, otherwise REMOTE_ADDR.
+        """
+        # Implementation handles NUM_PROXIES setting
+        ...
+
+    def wait(self):
+        """
+        Return recommended seconds to wait before next request.
+        Return None if not implemented.
+        """
+        return None
+```
+
+### SimpleRateThrottle
+
+Base class for rate throttles using cache. Subclasses must override `get_cache_key()`.
+
+```python
+class SimpleRateThrottle(BaseThrottle):
+    cache = default_cache
+    timer = time.time
+    cache_format = 'throttle_%(scope)s_%(ident)s'
+    scope = None
+    THROTTLE_RATES = api_settings.DEFAULT_THROTTLE_RATES
+
+    def get_cache_key(self, request, view):
+        """
+        Return unique cache key for throttling.
+        Return None if request should not be throttled.
+        """
+        raise NotImplementedError('.get_cache_key() must be overridden')
+```
+
+**Attributes:**
+
+<ParamField path="cache" type="cache" default="default_cache">
+  Django cache backend to use for storing request history
+</ParamField>
+
+<ParamField path="timer" type="callable" default="time.time">
+  Callable that returns current time in seconds
+</ParamField>
+
+<ParamField path="cache_format" type="string" default="'throttle_%(scope)s_%(ident)s'">
+  Format string for cache keys
+</ParamField>
+
+<ParamField path="scope" type="string" default="None">
+  Scope name used to look up throttle rate in DEFAULT_THROTTLE_RATES
+</ParamField>
+
+<ParamField path="rate" type="string" default="None">
+  Override rate instead of using scope (e.g., '100/day')
+</ParamField>
+
+## Built-in Throttle Classes
+
+### AnonRateThrottle
+
+Throttles unauthenticated users by IP address. Authenticated users are not throttled.
+
+```python
+from rest_framework.throttling import AnonRateThrottle
+
+class MyView(APIView):
+    throttle_classes = [AnonRateThrottle]
+```
+
+**Configuration:**
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+    }
+}
+```
+
+**Attributes:**
+
+<ParamField path="scope" type="string" default="'anon'">
+  Default scope for rate lookup
+</ParamField>
+
+Suitable for restricting requests from unknown sources.
+
+### UserRateThrottle
+
+Throttles authenticated users by user ID. Unauthenticated users are throttled by IP address.
+
+```python
+from rest_framework.throttling import UserRateThrottle
+
+class MyView(APIView):
+    throttle_classes = [UserRateThrottle]
+```
+
+**Configuration:**
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '1000/day',
+    }
+}
+```
+
+**Attributes:**
+
+<ParamField path="scope" type="string" default="'user'">
+  Default scope for rate lookup
+</ParamField>
+
+**Multiple User Throttles:**
+
+```python
+class BurstRateThrottle(UserRateThrottle):
+    scope = 'burst'
+
+class SustainedRateThrottle(UserRateThrottle):
+    scope = 'sustained'
+```
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'example.throttles.BurstRateThrottle',
+        'example.throttles.SustainedRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'burst': '60/min',
+        'sustained': '1000/day'
+    }
+}
+```
+
+Suitable for simple global rate restrictions per user.
+
+### ScopedRateThrottle
+
+Restricts access to specific parts of the API. Only applied to views with a `.throttle_scope` property.
+
+```python
+from rest_framework.throttling import ScopedRateThrottle
+
+class ContactListView(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'contacts'
+
+class UploadView(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'uploads'
+```
+
+**Configuration:**
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'contacts': '1000/day',
+        'uploads': '20/day'
+    }
+}
+```
+
+**Attributes:**
+
+<ParamField path="scope_attr" type="string" default="'throttle_scope'">
+  View attribute name to read scope from
+</ParamField>
+
+## Client Identification
+
+Clients are identified using:
+1. `X-Forwarded-For` HTTP header (if present)
+2. `REMOTE_ADDR` WSGI variable (fallback)
+
+### NUM_PROXIES Setting
+
+Configure how many proxies are in front of your API:
+
+```python
+REST_FRAMEWORK = {
+    'NUM_PROXIES': 1,  # Number of proxies
+}
+```
+
+<ParamField path="NUM_PROXIES" type="int" default="None">
+  - `None` - Use all of X-Forwarded-For
+  - `0` - Use REMOTE_ADDR only
+  - `N` - Use Nth-to-last address from X-Forwarded-For
+</ParamField>
+
+<Warning>
+Clients behind a NAT gateway will be treated as a single client when NUM_PROXIES is configured.
+</Warning>
+
+## Cache Configuration
+
+Throttle classes use Django's cache backend.
+
+**Default Setup:**
+
+```python
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+```
+
+**Custom Cache:**
+
+```python
+from django.core.cache import caches
+
+class CustomAnonRateThrottle(AnonRateThrottle):
+    cache = caches['alternate']
+```
+
+## Custom Throttles
+
+Implement custom throttles by overriding `BaseThrottle`:
+
+```python
+import random
+from rest_framework.throttling import BaseThrottle
+
+class RandomRateThrottle(BaseThrottle):
+    def allow_request(self, request, view):
+        # Randomly throttle 1 in 10 requests
+        return random.randint(1, 10) != 1
+```
+
+**With wait() Method:**
+
+```python
+class CustomThrottle(BaseThrottle):
+    def allow_request(self, request, view):
+        # Custom logic
+        if should_throttle:
+            return False
+        return True
+
+    def wait(self):
+        # Return seconds to wait
+        return 60
+```
+
+If `wait()` is implemented and request is throttled, a `Retry-After` header is included in the response.
+
+## Rate Throttle Internals
+
+### parse_rate()
+
+Parses rate string into (num_requests, duration) tuple:
+
+```python
+def parse_rate(self, rate):
+    """
+    Given '60/min', returns (60, 60)
+    Given '1000/day', returns (1000, 86400)
+    """
+    if rate is None:
+        return (None, None)
+    num, period = rate.split('/')
+    num_requests = int(num)
+    duration = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[period[0]]
+    return (num_requests, duration)
+```
+
+### throttle_success() / throttle_failure()
+
+Called when request passes or fails throttle check:
+
+```python
+def throttle_success(self):
+    """Insert current request timestamp into cache"""
+    self.history.insert(0, self.now)
+    self.cache.set(self.key, self.history, self.duration)
+    return True
+
+def throttle_failure(self):
+    """Called when request is throttled"""
+    return False
+```
+
+## Settings
+
+<ParamField path="DEFAULT_THROTTLE_CLASSES" type="list" default="[]">
+  List of throttle classes to use by default
+  
+  ```python
+  REST_FRAMEWORK = {
+      'DEFAULT_THROTTLE_CLASSES': [
+          'rest_framework.throttling.AnonRateThrottle',
+      ]
+  }
+  ```
+</ParamField>
+
+<ParamField path="DEFAULT_THROTTLE_RATES" type="dict" default="{}">
+  Dictionary mapping scope names to rate strings
+  
+  ```python
+  REST_FRAMEWORK = {
+      'DEFAULT_THROTTLE_RATES': {
+          'anon': '100/day',
+          'user': '1000/day',
+          'burst': '60/min',
+          'sustained': '1000/day',
+      }
+  }
+  ```
+</ParamField>
+
+<ParamField path="NUM_PROXIES" type="int" default="None">
+  Number of application proxies in front of the API
+</ParamField>
+
+## Response Headers
+
+### Retry-After
+
+Included when request is throttled and throttle implements `wait()` method:
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 60
+```
+
+## Notes
+
+### Concurrency
+
+<Warning>
+Built-in throttle implementations are subject to race conditions under high concurrency. They may allow a few extra requests through due to non-atomic cache operations.
+</Warning>
+
+For strict rate limiting under concurrent load, implement a custom throttle class using atomic operations.
+
+### Performance
+
+Throttle checks happen before the view executes. For high-traffic APIs, consider:
+- Using a fast cache backend (Redis, Memcached)
+- Configuring cache timeouts appropriately
+- Monitoring cache hit rates
+
+### Multiple Throttles
+
+You can use multiple throttles simultaneously:
+
+```python
+class MyView(APIView):
+    throttle_classes = [
+        BurstRateThrottle,
+        SustainedRateThrottle,
+        AnonRateThrottle,
+    ]
+```
+
+All throttle checks must pass for the request to be allowed.
+
+## Common Use Cases
+
+### Burst + Sustained Throttling
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'app.throttles.BurstRateThrottle',
+        'app.throttles.SustainedRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'burst': '60/min',      # Max 60 per minute
+        'sustained': '1000/day' # Max 1000 per day
+    }
+}
+```
+
+### Different Rates for Anonymous vs Authenticated
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',  # Restrictive for anonymous
+        'user': '10000/day' # Generous for authenticated
+    }
+}
+```
+
+### Scoped Rates for Different API Sections
+
+```python
+class UploadView(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'uploads'
+
+class SearchView(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'search'
+```
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_RATES': {
+        'uploads': '10/hour',   # Resource-intensive
+        'search': '1000/hour'  # Less intensive
+    }
+}
+```

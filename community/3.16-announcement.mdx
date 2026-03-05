@@ -1,0 +1,168 @@
+---
+title: Django REST Framework 3.16
+description: Release announcement for Django REST Framework version 3.16
+---
+
+# Django REST Framework 3.16
+
+<Info>
+Released on March 28th, 2025
+</Info>
+
+At the Internet, on March 28th, 2025, we are happy to announce the release of Django REST framework 3.16.
+
+## Updated Django and Python Support
+
+The latest release now fully supports Django 5.1 and the upcoming 5.2 LTS as well as Python 3.13.
+
+<CardGroup cols={2}>
+  <Card title="Minimum Django Version" icon="django">
+    Django 4.2 LTS
+  </Card>
+  
+  <Card title="Minimum Python Version" icon="python">
+    Python 3.9
+  </Card>
+  
+  <Card title="Latest Django Support" icon="check">
+    Django 5.1, 5.2a1
+  </Card>
+  
+  <Card title="Latest Python Support" icon="check">
+    Python 3.13
+  </Card>
+</CardGroup>
+
+<Warning>
+The current minimum versions are now Django 4.2 and Python 3.9. Python 3.8 support has been removed.
+</Warning>
+
+## Django LoginRequiredMiddleware
+
+The new `LoginRequiredMiddleware` introduced by Django 5.1 can now be used alongside Django REST Framework.
+
+<Note>
+However, it is **not honored for API views** as equivalent behavior can be configured via `DEFAULT_AUTHENTICATION_CLASSES`. See our [dedicated authentication section](/api/authentication#django-51-loginrequiredmiddleware) in the docs for more information.
+</Note>
+
+## Improved Support for UniqueConstraint
+
+The generation of validators for [UniqueConstraint](https://docs.djangoproject.com/en/stable/ref/models/constraints/#uniqueconstraint) has been improved to better support:
+
+<CardGroup cols={2}>
+  <Card title="Nullable Fields" icon="circle-question">
+    Better handling of nullable fields in unique constraints
+  </Card>
+  
+  <Card title="Conditional Constraints" icon="filter">
+    Support for constraints with conditions
+  </Card>
+</CardGroup>
+
+### Example
+
+If you have a model with a conditional unique constraint:
+
+```python
+from django.db import models
+
+class Article(models.Model):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(null=True, blank=True)
+    published = models.BooleanField(default=False)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['slug'],
+                condition=models.Q(published=True),
+                name='unique_published_slug'
+            )
+        ]
+```
+
+The serializer will now correctly validate this constraint, respecting both the nullable fields and the condition.
+
+## Other Fixes and Improvements
+
+There are a number of fixes and minor improvements in this release:
+
+<AccordionGroup>
+  <Accordion title="Documentation Improvements">
+    - Updated links to use stable versions
+    - Expanded docs on unique constraints
+    - Added tutorial notes for HyperlinkedModelSerializer
+    - Fixed broken links and typos
+  </Accordion>
+  
+  <Accordion title="Internal Infrastructure">
+    - Updated GitHub Actions to Ubuntu 24.04
+    - Updated test matrix for Django 5.2
+    - Added `pyupgrade` to pre-commit hooks
+    - Improved typing and test coverage
+  </Accordion>
+  
+  <Accordion title="Security & Bug Fixes">
+    - Fixed issues with AttributeError in properties
+    - Fixed template context handling
+    - Improved converter registration
+  </Accordion>
+  
+  <Accordion title="Deprecation & Cleanup">
+    - Removed Python 3.8 support
+    - Removed long deprecated code from request wrapper
+    - Removed deprecated AutoSchema methods
+  </Accordion>
+</AccordionGroup>
+
+## Complete Release Notes
+
+See the [release notes](/community/release-notes#316x-series) page for a complete listing of all changes in version 3.16.
+
+## Upgrading
+
+To upgrade to Django REST Framework 3.16:
+
+```bash
+pip install -U djangorestframework
+```
+
+<Warning>
+**Breaking Changes:**
+
+- Python 3.8 is no longer supported
+- Improved UniqueConstraint validation may affect existing behavior with nullable fields
+- Some deprecated APIs have been removed
+</Warning>
+
+## Contributors
+
+This release includes contributions from many developers in the community:
+
+<Info>
+**New Contributors:**
+
+- @araggohnxd, @mbeijen, @stefan6419846, @ren000thomas, @ulgens, @bukh-sal, @rezatn0934, @Rohit10jr, @kushibayev, @alihassancods, @kulikjak, @Natgho
+
+Thank you to everyone who contributed to this release!
+</Info>
+
+## Links
+
+<CardGroup cols={2}>
+  <Card title="Full Changelog" href="https://github.com/encode/django-rest-framework/compare/3.15.2...3.16.0" icon="github">
+    View all changes on GitHub
+  </Card>
+  
+  <Card title="PyPI Release" href="https://pypi.org/project/djangorestframework/3.16.0/" icon="python">
+    Download from PyPI
+  </Card>
+  
+  <Card title="Documentation" href="/" icon="book">
+    Browse the documentation
+  </Card>
+  
+  <Card title="Discussion Group" href="https://groups.google.com/forum/#!forum/django-rest-framework" icon="comments">
+    Join the community
+  </Card>
+</CardGroup>

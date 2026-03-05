@@ -1,0 +1,224 @@
+---
+title: Format Suffixes
+description: API reference for Django REST Framework format suffix patterns
+---
+
+Format suffixes allow URLs to include a format extension (e.g., `.json`, `.api`) to specify the response format.
+
+## format_suffix_patterns
+
+Add format suffix patterns to URL patterns.
+
+```python
+from rest_framework.urlpatterns import format_suffix_patterns
+from django.urls import path
+
+urlpatterns = [
+    path('users/', user_list, name='user-list'),
+    path('users/<int:pk>/', user_detail, name='user-detail'),
+]
+
+urlpatterns = format_suffix_patterns(urlpatterns)
+```
+
+### Parameters
+
+<ParamField path="urlpatterns" type="list" required>
+  A list of URL patterns to supplement with format suffixes
+</ParamField>
+
+<ParamField path="suffix_required" type="bool">
+  If `True`, only suffixed URLs will be generated, and non-suffixed URLs will not be used. Default is `False`
+</ParamField>
+
+<ParamField path="allowed" type="list | tuple">
+  An optional list of allowed format suffixes (e.g., `['json', 'html']`). If not specified, any format is allowed
+</ParamField>
+
+### Returns
+
+A new list of URL patterns that includes both the original patterns and patterns with format suffixes.
+
+---
+
+## Usage
+
+### Basic Usage
+
+```python
+from django.urls import path
+from rest_framework.urlpatterns import format_suffix_patterns
+from myapp import views
+
+urlpatterns = [
+    path('items/', views.item_list),
+    path('items/<int:pk>/', views.item_detail),
+]
+
+urlpatterns = format_suffix_patterns(urlpatterns)
+```
+
+This allows requests like:
+```
+GET /items/
+GET /items.json
+GET /items.api
+GET /items/1/
+GET /items/1.json
+```
+
+### Restrict Format Suffixes
+
+```python
+urlpatterns = format_suffix_patterns(
+    urlpatterns,
+    allowed=['json', 'html']
+)
+```
+
+Only `.json` and `.html` suffixes are allowed.
+
+### Require Format Suffixes
+
+```python
+urlpatterns = format_suffix_patterns(
+    urlpatterns,
+    suffix_required=True
+)
+```
+
+With `suffix_required=True`, only the suffixed URLs are generated:
+```
+GET /items.json      # works
+GET /items/          # 404
+```
+
+---
+
+## Settings
+
+### FORMAT_SUFFIX_KWARG
+
+The URL keyword argument name for the format suffix.
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'FORMAT_SUFFIX_KWARG': 'format',  # default
+}
+```
+
+### URL_FORMAT_OVERRIDE
+
+The query parameter name that can override the format.
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'URL_FORMAT_OVERRIDE': 'format',  # default
+}
+```
+
+Allows requests like:
+```
+GET /items/?format=json
+```
+
+---
+
+## View Integration
+
+Views automatically receive the format suffix as a keyword argument:
+
+```python
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+@api_view(['GET'])
+def item_list(request, format=None):
+    items = Item.objects.all()
+    serializer = ItemSerializer(items, many=True)
+    return Response(serializer.data)
+```
+
+The `format` parameter contains the suffix value (e.g., `'json'`, `'html'`).
+
+---
+
+## Content Negotiation
+
+Format suffixes work with content negotiation. When a format suffix is present:
+
+1. DRF looks up the appropriate renderer for that format
+2. The renderer is used to format the response
+3. The `Content-Type` header is set accordingly
+
+```python
+GET /items.json       # Returns application/json
+GET /items.html       # Returns text/html  
+GET /items.api        # Returns text/html (browsable API)
+```
+
+---
+
+## Examples
+
+### With ViewSets
+
+```python
+from rest_framework import routers, viewsets
+from rest_framework.urlpatterns import format_suffix_patterns
+
+class ItemViewSet(viewsets.ModelViewSet):
+    queryset = Item.objects.all()
+    serializer_class = ItemSerializer
+
+router = routers.DefaultRouter()
+router.register('items', ItemViewSet)
+
+urlpatterns = format_suffix_patterns(router.urls)
+```
+
+### With Function-Based Views
+
+```python
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.urls import path
+from rest_framework.urlpatterns import format_suffix_patterns
+
+@api_view(['GET', 'POST'])
+def snippet_list(request, format=None):
+    if request.method == 'GET':
+        snippets = Snippet.objects.all()
+        serializer = SnippetSerializer(snippets, many=True)
+        return Response(serializer.data)
+    elif request.method == 'POST':
+        serializer = SnippetSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+urlpatterns = [
+    path('snippets/', snippet_list),
+]
+
+urlpatterns = format_suffix_patterns(urlpatterns)
+```
+
+### Custom Format Converters
+
+DRF automatically registers URL converters for format suffixes:
+
+```python
+# Internally, DRF creates converters like:
+class FormatSuffixConverter:
+    regex = r'\.(?:json|html|api)/?'
+    
+    def to_python(self, value):
+        return value.strip('./')
+    
+    def to_url(self, value):
+        return '.' + value + '/'
+```

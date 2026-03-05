@@ -1,0 +1,628 @@
+---
+title: Routers
+description: Router classes API reference
+---
+
+## Overview
+
+Routers provide a convenient way of automatically determining the URL configuration for your API. They work by registering viewsets and generating URL patterns automatically.
+
+```python
+from rest_framework import routers
+
+router = routers.DefaultRouter()
+router.register(r'users', UserViewSet)
+router.register(r'accounts', AccountViewSet)
+urlpatterns = router.urls
+```
+
+---
+
+## BaseRouter
+
+**Signature:** `class BaseRouter`
+
+The base class for all routers. Provides the basic interface for registering viewsets and generating URLs.
+
+### Instance Methods
+
+#### register()
+
+**Signature:** `register(prefix, viewset, basename=None)`
+
+Registers a viewset with the router.
+
+<ParamField path="prefix" type="str" required>
+  The URL prefix to use for this set of routes.
+</ParamField>
+
+<ParamField path="viewset" type="class" required>
+  The viewset class to register.
+</ParamField>
+
+<ParamField path="basename" type="str">
+  The base name for the URL patterns. If unset, will be automatically generated based on the viewset's `queryset` attribute.
+</ParamField>
+
+```python
+router = SimpleRouter()
+router.register(r'users', UserViewSet, basename='user')
+```
+
+<Note>
+If the viewset doesn't have a `queryset` attribute, you must specify the `basename` argument.
+</Note>
+
+<Warning>
+Do not include a trailing slash in the prefix (e.g., use `r'users'`, not `r'users/'`). Routers append slashes automatically based on the trailing slash configuration.
+</Warning>
+
+#### get_urls()
+
+**Signature:** `get_urls()`
+
+Returns a list of URL patterns for all registered viewsets.
+
+**Returns:** `list[URLPattern]`
+
+#### get_default_basename()
+
+**Signature:** `get_default_basename(viewset)`
+
+Determines the basename automatically from the viewset.
+
+<ParamField path="viewset" type="class" required>
+  The viewset class.
+</ParamField>
+
+**Returns:** `str`
+
+**Raises:** `AssertionError` if the viewset doesn't have a `queryset` attribute
+
+#### is_already_registered()
+
+**Signature:** `is_already_registered(basename)`
+
+Checks if a basename is already registered.
+
+<ParamField path="basename" type="str" required>
+  The basename to check.
+</ParamField>
+
+**Returns:** `bool`
+
+### Properties
+
+#### urls
+
+Returns the list of URL patterns. This property caches the result of `get_urls()`.
+
+**Returns:** `list[URLPattern]`
+
+```python
+router = DefaultRouter()
+router.register(r'users', UserViewSet)
+
+urlpatterns = [
+    path('api/', include(router.urls)),
+]
+```
+
+### Attributes
+
+#### registry
+
+A list of tuples containing `(prefix, viewset, basename)` for all registered viewsets.
+
+**Type:** `list[tuple[str, class, str]]`
+
+---
+
+## SimpleRouter
+
+**Signature:** `class SimpleRouter(BaseRouter)`
+
+Includes routes for the standard set of `list`, `create`, `retrieve`, `update`, `partial_update`, and `destroy` actions. The viewset can also mark additional methods to be routed using the `@action` decorator.
+
+### Constructor
+
+**Signature:** `__init__(trailing_slash=True, use_regex_path=True)`
+
+<ParamField path="trailing_slash" type="bool" default="True">
+  Whether to append trailing slashes to URLs.
+</ParamField>
+
+<ParamField path="use_regex_path" type="bool" default="True">
+  Whether to use regex patterns (True) or path converters (False).
+</ParamField>
+
+```python
+router = SimpleRouter(trailing_slash=False)
+```
+
+### Generated Routes
+
+| URL Pattern | HTTP Method | Action | URL Name |
+|-------------|-------------|--------|----------|
+| {prefix}/ | GET | list | {basename}-list |
+| {prefix}/ | POST | create | {basename}-list |
+| {prefix}/{lookup}/ | GET | retrieve | {basename}-detail |
+| {prefix}/{lookup}/ | PUT | update | {basename}-detail |
+| {prefix}/{lookup}/ | PATCH | partial_update | {basename}-detail |
+| {prefix}/{lookup}/ | DELETE | destroy | {basename}-detail |
+| {prefix}/{url_path}/ | GET* | @action(detail=False) | {basename}-{url_name} |
+| {prefix}/{lookup}/{url_path}/ | GET* | @action(detail=True) | {basename}-{url_name} |
+
+*or as specified by the `methods` argument
+
+### Instance Methods
+
+#### get_default_basename()
+
+**Signature:** `get_default_basename(viewset)`
+
+Determines the basename from the viewset's queryset model name.
+
+<ParamField path="viewset" type="class" required>
+  The viewset class.
+</ParamField>
+
+**Returns:** `str` - Lowercase model name
+
+```python
+# For a viewset with queryset = User.objects.all()
+# Returns: 'user'
+```
+
+#### get_routes()
+
+**Signature:** `get_routes(viewset)`
+
+Returns the list of Route namedtuples for the viewset, including dynamically generated routes from `@action` decorated methods.
+
+<ParamField path="viewset" type="class" required>
+  The viewset class.
+</ParamField>
+
+**Returns:** `list[Route]`
+
+#### get_method_map()
+
+**Signature:** `get_method_map(viewset, method_map)`
+
+Returns a mapping of HTTP methods to actions, filtered to only include mappings that are actually implemented by the viewset.
+
+<ParamField path="viewset" type="class" required>
+  The viewset class.
+</ParamField>
+
+<ParamField path="method_map" type="dict" required>
+  Mapping of HTTP methods to action names.
+</ParamField>
+
+**Returns:** `dict[str, str]`
+
+#### get_lookup_regex()
+
+**Signature:** `get_lookup_regex(viewset, lookup_prefix='')`
+
+Returns the portion of the URL regex used to match against a single instance.
+
+<ParamField path="viewset" type="class" required>
+  The viewset class.
+</ParamField>
+
+<ParamField path="lookup_prefix" type="str" default="''">
+  Prefix for the lookup (used by nested routers).
+</ParamField>
+
+**Returns:** `str`
+
+Uses the viewset's `lookup_field` (defaults to `'pk'`) and `lookup_url_kwarg` attributes. For regex patterns, uses `lookup_value_regex` (defaults to `[^/.]+`). For path converters, uses `lookup_value_converter` (defaults to `str`).
+
+```python
+# For a viewset with lookup_field = 'username'
+# With regex: '(?P<username>[^/.]+)'
+# With path converters: '<str:username>'
+```
+
+### Customizing Lookup Patterns
+
+For regex patterns, set `lookup_value_regex` on your viewset:
+
+```python
+class MyModelViewSet(viewsets.ModelViewSet):
+    lookup_field = 'uuid'
+    lookup_value_regex = '[0-9a-f]{32}'
+```
+
+For path converters, set `lookup_value_converter`:
+
+```python
+class MyModelViewSet(viewsets.ModelViewSet):
+    lookup_field = 'my_model_uuid'
+    lookup_value_converter = 'uuid'
+```
+
+### Class Attributes
+
+#### routes
+
+A list of Route and DynamicRoute namedtuples that define the URL patterns.
+
+**Type:** `list[Route | DynamicRoute]`
+
+---
+
+## DefaultRouter
+
+**Signature:** `class DefaultRouter(SimpleRouter)`
+
+Extends `SimpleRouter` by additionally including a default API root view that returns a response containing hyperlinks to all the list views. Also generates routes for optional `.json` style format suffixes.
+
+### Constructor
+
+**Signature:** `__init__(trailing_slash=True, use_regex_path=True, root_renderers=None)`
+
+<ParamField path="trailing_slash" type="bool" default="True">
+  Whether to append trailing slashes to URLs.
+</ParamField>
+
+<ParamField path="use_regex_path" type="bool" default="True">
+  Whether to use regex patterns (True) or path converters (False).
+</ParamField>
+
+<ParamField path="root_renderers" type="list[class]">
+  List of renderer classes for the root view. Defaults to `DEFAULT_RENDERER_CLASSES`.
+</ParamField>
+
+```python
+router = DefaultRouter(trailing_slash=False)
+```
+
+### Generated Routes
+
+Includes all routes from [SimpleRouter](#simplerouter), plus:
+
+| URL Pattern | HTTP Method | Action | URL Name |
+|-------------|-------------|--------|----------|
+| / | GET | auto-generated root view | api-root |
+
+Format suffixes (`.json`, etc.) are appended to all URLs if `include_format_suffixes=True`.
+
+### Instance Methods
+
+#### get_api_root_view()
+
+**Signature:** `get_api_root_view(api_urls=None)`
+
+Returns the root view for the API.
+
+<ParamField path="api_urls" type="list[URLPattern]">
+  List of URL patterns.
+</ParamField>
+
+**Returns:** `callable` - View function
+
+```python
+router = DefaultRouter()
+router.register(r'users', UserViewSet)
+root_view = router.get_api_root_view()
+```
+
+### Class Attributes
+
+#### include_root_view
+
+Whether to include the API root view.
+
+**Type:** `bool`
+
+**Default:** `True`
+
+#### include_format_suffixes
+
+Whether to include format suffix patterns (`.json`, `.xml`, etc.).
+
+**Type:** `bool`
+
+**Default:** `True`
+
+#### root_view_name
+
+The URL name for the root view.
+
+**Type:** `str`
+
+**Default:** `'api-root'`
+
+#### APIRootView
+
+The view class to use for the root view.
+
+**Type:** `class`
+
+**Default:** `APIRootView`
+
+#### APISchemaView
+
+The view class to use for schema generation.
+
+**Type:** `class`
+
+**Default:** `SchemaView`
+
+#### SchemaGenerator
+
+The schema generator class.
+
+**Type:** `class`
+
+**Default:** `SchemaGenerator`
+
+---
+
+## Route Namedtuples
+
+### Route
+
+Defines a standard route pattern.
+
+**Fields:**
+
+<ParamField path="url" type="str" required>
+  URL pattern string. May include format strings: `{prefix}`, `{lookup}`, `{trailing_slash}`.
+</ParamField>
+
+<ParamField path="mapping" type="dict" required>
+  Mapping of HTTP method names to view action names.
+</ParamField>
+
+<ParamField path="name" type="str" required>
+  Name pattern for URL reversing. May include format string: `{basename}`.
+</ParamField>
+
+<ParamField path="detail" type="bool" required>
+  Whether this is a detail route (True) or list route (False).
+</ParamField>
+
+<ParamField path="initkwargs" type="dict" required>
+  Additional arguments passed when instantiating the view.
+</ParamField>
+
+```python
+from rest_framework.routers import Route
+
+Route(
+    url=r'^{prefix}$',
+    mapping={'get': 'list', 'post': 'create'},
+    name='{basename}-list',
+    detail=False,
+    initkwargs={'suffix': 'List'}
+)
+```
+
+### DynamicRoute
+
+Defines a route pattern for `@action` decorated methods.
+
+**Fields:**
+
+<ParamField path="url" type="str" required>
+  URL pattern string. May include format strings: `{prefix}`, `{lookup}`, `{trailing_slash}`, `{url_path}`.
+</ParamField>
+
+<ParamField path="name" type="str" required>
+  Name pattern for URL reversing. May include format strings: `{basename}`, `{url_name}`.
+</ParamField>
+
+<ParamField path="detail" type="bool" required>
+  Whether this is a detail route (True) or list route (False).
+</ParamField>
+
+<ParamField path="initkwargs" type="dict" required>
+  Additional arguments passed when instantiating the view.
+</ParamField>
+
+```python
+from rest_framework.routers import DynamicRoute
+
+DynamicRoute(
+    url=r'^{prefix}/{lookup}/{url_path}$',
+    name='{basename}-{url_name}',
+    detail=True,
+    initkwargs={}
+)
+```
+
+---
+
+## Custom Routers
+
+You can create custom routers by subclassing `SimpleRouter` and setting the `.routes` attribute.
+
+```python
+from rest_framework.routers import Route, DynamicRoute, SimpleRouter
+
+class CustomReadOnlyRouter(SimpleRouter):
+    """
+    A router for read-only APIs, which doesn't use trailing slashes.
+    """
+    routes = [
+        Route(
+            url=r'^{prefix}$',
+            mapping={'get': 'list'},
+            name='{basename}-list',
+            detail=False,
+            initkwargs={'suffix': 'List'}
+        ),
+        Route(
+            url=r'^{prefix}/{lookup}$',
+            mapping={'get': 'retrieve'},
+            name='{basename}-detail',
+            detail=True,
+            initkwargs={'suffix': 'Detail'}
+        ),
+        DynamicRoute(
+            url=r'^{prefix}/{lookup}/{url_path}$',
+            name='{basename}-{url_name}',
+            detail=True,
+            initkwargs={}
+        )
+    ]
+```
+
+### Advanced Custom Routers
+
+For complete control, override `BaseRouter` and implement `get_urls()`:
+
+```python
+from rest_framework.routers import BaseRouter
+
+class CustomRouter(BaseRouter):
+    def get_urls(self):
+        urls = []
+        for prefix, viewset, basename in self.registry:
+            # Generate URL patterns
+            ...
+        return urls
+    
+    def get_default_basename(self, viewset):
+        # Determine basename from viewset
+        ...
+```
+
+The registered viewsets are available in `self.registry` as a list of `(prefix, viewset, basename)` tuples.
+
+---
+
+## APIRootView
+
+**Signature:** `class APIRootView(APIView)`
+
+The default root view used by `DefaultRouter`.
+
+### Class Attributes
+
+#### api_root_dict
+
+A dictionary mapping URL names to their prefixes.
+
+**Type:** `dict[str, str] | None`
+
+**Default:** `None`
+
+#### _ignore_model_permissions
+
+When True, model permissions are not checked.
+
+**Type:** `bool`
+
+**Default:** `True`
+
+#### schema
+
+The schema for this view. Set to `None` to exclude from schema generation.
+
+**Type:** `AutoSchema | None`
+
+**Default:** `None`
+
+### Instance Methods
+
+#### get()
+
+**Signature:** `get(request, *args, **kwargs)`
+
+Returns a plain `{"name": "hyperlink"}` response with links to all registered viewsets.
+
+<ParamField path="request" type="Request" required>
+  The request instance.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+---
+
+## Using Routers with URL Configuration
+
+### Appending to URL Patterns
+
+```python
+router = SimpleRouter()
+router.register(r'users', UserViewSet)
+router.register(r'accounts', AccountViewSet)
+
+urlpatterns = [
+    path('forgot-password/', ForgotPasswordFormView.as_view()),
+]
+
+urlpatterns += router.urls
+```
+
+### Using include()
+
+```python
+from django.urls import path, include
+
+urlpatterns = [
+    path('forgot-password/', ForgotPasswordFormView.as_view()),
+    path('api/', include(router.urls)),
+]
+```
+
+### With Application Namespace
+
+```python
+urlpatterns = [
+    path('api/', include((router.urls, 'app_name'))),
+]
+```
+
+### With Application and Instance Namespace
+
+```python
+urlpatterns = [
+    path('api/', include((router.urls, 'app_name'), namespace='instance_name')),
+]
+```
+
+<Warning>
+If using namespacing with hyperlinked serializers, ensure that any `view_name` parameters on the serializers correctly reflect the namespace. For example, use `view_name='app_name:user-detail'`.
+</Warning>
+
+---
+
+## Utility Functions
+
+### escape_curly_brackets()
+
+**Signature:** `escape_curly_brackets(url_path)`
+
+Double brackets in regex of url_path for escape string formatting.
+
+<ParamField path="url_path" type="str" required>
+  The URL path to escape.
+</ParamField>
+
+**Returns:** `str`
+
+### flatten()
+
+**Signature:** `flatten(list_of_lists)`
+
+Takes an iterable of iterables, returns a single iterable containing all items.
+
+<ParamField path="list_of_lists" type="Iterable[Iterable]" required>
+  Nested iterables to flatten.
+</ParamField>
+
+**Returns:** `itertools.chain`

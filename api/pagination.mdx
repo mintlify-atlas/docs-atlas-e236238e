@@ -1,0 +1,272 @@
+---
+title: Pagination
+description: API reference for Django REST Framework pagination classes
+---
+
+Pagination classes determine how large result sets are split into individual pages of data.
+
+## BasePagination
+
+Base class for all pagination classes.
+
+```python
+from rest_framework.pagination import BasePagination
+```
+
+### Methods
+
+#### `paginate_queryset(queryset, request, view=None)`
+
+Paginate a queryset if required, either returning a page object, or `None` if pagination is not configured.
+
+<ParamField path="queryset" type="QuerySet" required>
+  The queryset to paginate
+</ParamField>
+
+<ParamField path="request" type="Request" required>
+  The request instance
+</ParamField>
+
+<ParamField path="view" type="APIView">
+  The view instance (optional)
+</ParamField>
+
+#### `get_paginated_response(data)`
+
+Return a `Response` object containing paginated data.
+
+<ParamField path="data" type="list" required>
+  The serialized data for the page
+</ParamField>
+
+#### `get_paginated_response_schema(schema)`
+
+Return the schema for paginated responses.
+
+<ParamField path="schema" type="dict" required>
+  The schema for the results
+</ParamField>
+
+---
+
+## PageNumberPagination
+
+A simple page number based pagination style that accepts a single number page number in the request query parameters.
+
+```python
+from rest_framework.pagination import PageNumberPagination
+
+class MyPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+```
+
+### Attributes
+
+<ParamField path="page_size" type="int">
+  Number of items per page. Defaults to `None` (pagination disabled)
+</ParamField>
+
+<ParamField path="django_paginator_class" type="class">
+  The Django Paginator class to use. Default is `django.core.paginator.Paginator`
+</ParamField>
+
+<ParamField path="page_query_param" type="str">
+  Query parameter name for the page number. Default is `'page'`
+</ParamField>
+
+<ParamField path="page_size_query_param" type="str">
+  Query parameter name for page size. Default is `None` (client cannot control page size)
+</ParamField>
+
+<ParamField path="max_page_size" type="int">
+  Maximum allowable page size. Only relevant if `page_size_query_param` is set
+</ParamField>
+
+<ParamField path="last_page_strings" type="tuple">
+  Values that can be used to request the final page. Default is `('last',)`
+</ParamField>
+
+<ParamField path="template" type="str">
+  Template name for rendering pagination controls. Default is `'rest_framework/pagination/numbers.html'`
+</ParamField>
+
+### Response Format
+
+```json
+{
+    "count": 123,
+    "next": "http://api.example.org/accounts/?page=4",
+    "previous": "http://api.example.org/accounts/?page=2",
+    "results": [
+        // ...
+    ]
+}
+```
+
+### Methods
+
+#### `get_page_number(request, paginator)`
+
+Get the page number from the request query parameters.
+
+#### `get_next_link()`
+
+Return the URL for the next page, or `None` if there is no next page.
+
+#### `get_previous_link()`
+
+Return the URL for the previous page, or `None` if there is no previous page.
+
+---
+
+## LimitOffsetPagination
+
+A limit/offset based pagination style that mirrors the syntax used when looking up multiple database records.
+
+```python
+from rest_framework.pagination import LimitOffsetPagination
+
+class MyPagination(LimitOffsetPagination):
+    default_limit = 10
+    max_limit = 100
+```
+
+### Attributes
+
+<ParamField path="default_limit" type="int">
+  Default number of items to return. Defaults to `None` (pagination disabled)
+</ParamField>
+
+<ParamField path="limit_query_param" type="str">
+  Query parameter name for the limit. Default is `'limit'`
+</ParamField>
+
+<ParamField path="offset_query_param" type="str">
+  Query parameter name for the offset. Default is `'offset'`
+</ParamField>
+
+<ParamField path="max_limit" type="int">
+  Maximum allowable limit value. Default is `None`
+</ParamField>
+
+<ParamField path="template" type="str">
+  Template name for rendering pagination controls. Default is `'rest_framework/pagination/numbers.html'`
+</ParamField>
+
+### Response Format
+
+```json
+{
+    "count": 123,
+    "next": "http://api.example.org/accounts/?limit=100&offset=200",
+    "previous": "http://api.example.org/accounts/?limit=100&offset=0",
+    "results": [
+        // ...
+    ]
+}
+```
+
+### Methods
+
+#### `get_limit(request)`
+
+Get the limit from the request query parameters.
+
+#### `get_offset(request)`
+
+Get the offset from the request query parameters.
+
+#### `get_count(queryset)`
+
+Determine the object count, supporting either querysets or regular lists.
+
+---
+
+## CursorPagination
+
+Cursor-based pagination ensures consistent results even when items are being inserted or deleted. It works by using an opaque cursor value that the client uses to navigate through the results.
+
+```python
+from rest_framework.pagination import CursorPagination
+
+class MyPagination(CursorPagination):
+    page_size = 10
+    ordering = '-created'
+```
+
+### Attributes
+
+<ParamField path="page_size" type="int">
+  Number of items per page. Defaults to `None` (pagination disabled)
+</ParamField>
+
+<ParamField path="cursor_query_param" type="str">
+  Query parameter name for the cursor. Default is `'cursor'`
+</ParamField>
+
+<ParamField path="ordering" type="str | tuple">
+  Field(s) to use for ordering. Default is `'-created'`. Must be an unchanging, unique or nearly-unique field
+</ParamField>
+
+<ParamField path="page_size_query_param" type="str">
+  Query parameter name for page size. Default is `None`
+</ParamField>
+
+<ParamField path="max_page_size" type="int">
+  Maximum allowable page size. Only relevant if `page_size_query_param` is set
+</ParamField>
+
+<ParamField path="offset_cutoff" type="int">
+  Maximum offset value to guard against malicious queries. Default is `1000`
+</ParamField>
+
+<ParamField path="template" type="str">
+  Template name for rendering pagination controls. Default is `'rest_framework/pagination/previous_and_next.html'`
+</ParamField>
+
+### Response Format
+
+```json
+{
+    "next": "http://api.example.org/accounts/?cursor=cD00ODY%3D",
+    "previous": "http://api.example.org/accounts/?cursor=cj0xJnA9NDg3",
+    "results": [
+        // ...
+    ]
+}
+```
+
+### Methods
+
+#### `get_ordering(request, queryset, view)`
+
+Return a tuple of strings that may be used in an `order_by` method.
+
+#### `decode_cursor(request)`
+
+Given a request with a cursor, return a `Cursor` instance.
+
+#### `encode_cursor(cursor)`
+
+Given a `Cursor` instance, return a URL with encoded cursor.
+
+---
+
+## Example
+
+```python
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 100
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
+
+class MyView(generics.ListAPIView):
+    queryset = MyModel.objects.all()
+    serializer_class = MySerializer
+    pagination_class = StandardResultsSetPagination
+```

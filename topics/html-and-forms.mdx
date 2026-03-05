@@ -1,0 +1,542 @@
+---
+title: HTML & Forms
+description: Rendering HTML responses and using serializers as HTML forms in Django REST Framework
+---
+
+REST framework is suitable for returning both API-style responses and regular HTML pages. Additionally, serializers can be used as HTML forms and rendered in templates.
+
+## Rendering HTML
+
+To return HTML responses, use either `TemplateHTMLRenderer` or `StaticHTMLRenderer`.
+
+### TemplateHTMLRenderer
+
+`TemplateHTMLRenderer` renders data using Django templates. The response should contain a dictionary of context data.
+
+**Basic Example:**
+
+```python
+from rest_framework.renderers import TemplateHTMLRenderer
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from myapp.models import Profile
+
+class ProfileList(APIView):
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name = 'profile_list.html'
+
+    def get(self, request):
+        queryset = Profile.objects.all()
+        return Response({'profiles': queryset})
+```
+
+**Template (profile_list.html):**
+
+```django
+<html>
+<body>
+  <h1>Profiles</h1>
+  <ul>
+    {%% for profile in profiles %%}
+      <li>{{ profile.name }} - {{ profile.email }}</li>
+    {%% endfor %%}
+  </ul>
+</body>
+</html>
+```
+
+**Template Name Resolution:**
+
+The template name is determined by (in order of preference):
+
+1. An explicit `.template_name` attribute on the response
+2. An explicit `.template_name` attribute on the renderer class
+3. The result of calling `view.get_template_names()`
+
+```python
+class ProfileDetail(APIView):
+    renderer_classes = [TemplateHTMLRenderer]
+
+    def get(self, request, pk):
+        profile = get_object_or_404(Profile, pk=pk)
+        serializer = ProfileSerializer(profile)
+        # Specify template on response
+        return Response(
+            {'serializer': serializer, 'profile': profile},
+            template_name='profile_detail.html'
+        )
+```
+
+### StaticHTMLRenderer
+
+`StaticHTMLRenderer` returns pre-rendered HTML content. The response should contain a string of HTML.
+
+```python
+from rest_framework.renderers import StaticHTMLRenderer
+
+class AboutView(APIView):
+    renderer_classes = [StaticHTMLRenderer]
+
+    def get(self, request):
+        data = '<html><body><h1>About Us</h1></body></html>'
+        return Response(data)
+```
+
+<Info>
+  `TemplateHTMLRenderer` is for template-based HTML, while `StaticHTMLRenderer` is for pre-rendered HTML strings.
+</Info>
+
+### Mixed Renderers
+
+Combine HTML and JSON renderers to support both content types:
+
+```python
+from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
+
+class ProfileList(APIView):
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+    template_name = 'profile_list.html'
+
+    def get(self, request):
+        queryset = Profile.objects.all()
+        serializer = ProfileSerializer(queryset, many=True)
+        return Response({'profiles': serializer.data})
+
+# Access as HTML: GET /profiles/
+# Access as JSON: GET /profiles/?format=json
+```
+
+## Rendering Forms
+
+Serializers can be rendered as forms using the `render_form` template tag.
+
+### Basic Form Rendering
+
+**View:**
+
+```python
+from django.shortcuts import get_object_or_404, redirect
+from rest_framework.renderers import TemplateHTMLRenderer
+from rest_framework.views import APIView
+from myapp.models import Profile
+from myapp.serializers import ProfileSerializer
+
+class ProfileDetail(APIView):
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name = 'profile_detail.html'
+
+    def get(self, request, pk):
+        profile = get_object_or_404(Profile, pk=pk)
+        serializer = ProfileSerializer(profile)
+        return Response({'serializer': serializer, 'profile': profile})
+
+    def post(self, request, pk):
+        profile = get_object_or_404(Profile, pk=pk)
+        serializer = ProfileSerializer(profile, data=request.data)
+        if not serializer.is_valid():
+            return Response({'serializer': serializer, 'profile': profile})
+        serializer.save()
+        return redirect('profile-list')
+```
+
+**Template:**
+
+```django
+{%% load rest_framework %%}
+
+<html>
+<body>
+  <h1>Profile - {{ profile.name }}</h1>
+
+  <form action="{%% url 'profile-detail' pk=profile.pk %%}" method="POST">
+    {%% csrf_token %%}
+    {%% render_form serializer %%}
+    <input type="submit" value="Save">
+  </form>
+</body>
+</html>
+```
+
+<Info>
+  The `render_form` template tag automatically generates form fields based on your serializer definition.
+</Info>
+
+## Template Packs
+
+REST framework includes three built-in template packs based on Bootstrap 3:
+
+- **horizontal** - Labels and controls side-by-side (2/10 column split)
+- **vertical** - Labels above controls (default)
+- **inline** - All controls inline
+
+### Including Bootstrap CSS
+
+```html
+<head>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+</head>
+```
+
+### Vertical Template Pack
+
+Labels appear above their corresponding control inputs (default):
+
+```django
+{%% load rest_framework %%}
+
+<form action="{%% url 'login' %%}" method="post" novalidate>
+  {%% csrf_token %%}
+  {%% render_form serializer template_pack='rest_framework/vertical' %%}
+  <button type="submit" class="btn btn-default">Sign in</button>
+</form>
+```
+
+![Vertical form example](../img/vertical.png)
+
+### Horizontal Template Pack
+
+Labels and controls side-by-side (used in browsable API):
+
+```django
+{%% load rest_framework %%}
+
+<form class="form-horizontal" action="{%% url 'login' %%}" method="post" novalidate>
+  {%% csrf_token %%}
+  {%% render_form serializer %%}
+  <div class="form-group">
+    <div class="col-sm-offset-2 col-sm-10">
+      <button type="submit" class="btn btn-default">Sign in</button>
+    </div>
+  </div>
+</form>
+```
+
+![Horizontal form example](../img/horizontal.png)
+
+### Inline Template Pack
+
+Compact form with all controls inline:
+
+```django
+{%% load rest_framework %%}
+
+<form class="form-inline" action="{%% url 'login' %%}" method="post" novalidate>
+  {%% csrf_token %%}
+  {%% render_form serializer template_pack='rest_framework/inline' %%}
+  <button type="submit" class="btn btn-default">Sign in</button>
+</form>
+```
+
+![Inline form example](../img/inline.png)
+
+### Example Serializer
+
+```python
+from rest_framework import serializers
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField(
+        max_length=100,
+        style={'placeholder': 'Email', 'autofocus': True}
+    )
+    password = serializers.CharField(
+        max_length=100,
+        style={'input_type': 'password', 'placeholder': 'Password'}
+    )
+    remember_me = serializers.BooleanField()
+```
+
+## Field Styles
+
+Customize field rendering using the `style` keyword argument:
+
+```python
+details = serializers.CharField(
+    max_length=1000,
+    style={'base_template': 'textarea.html'}
+)
+```
+
+### Available Base Templates
+
+The `HTMLFormRenderer` defines default templates for each field type:
+
+```python rest_framework/renderers.py
+default_style = ClassLookupDict({
+    serializers.Field: {
+        'base_template': 'input.html',
+        'input_type': 'text'
+    },
+    serializers.EmailField: {
+        'base_template': 'input.html',
+        'input_type': 'email'
+    },
+    serializers.URLField: {
+        'base_template': 'input.html',
+        'input_type': 'url'
+    },
+    serializers.IntegerField: {
+        'base_template': 'input.html',
+        'input_type': 'number'
+    },
+    serializers.BooleanField: {
+        'base_template': 'checkbox.html'
+    },
+    serializers.ChoiceField: {
+        'base_template': 'select.html',
+    },
+    serializers.MultipleChoiceField: {
+        'base_template': 'select_multiple.html',
+    },
+})
+```
+
+### Base Template Options
+
+| Base Template | Valid Field Types | Additional Style Options |
+|--------------|-------------------|-------------------------|
+| `input.html` | String, numeric, date/time fields | `input_type`, `placeholder`, `hide_label`, `autofocus` |
+| `textarea.html` | `CharField` | `rows`, `placeholder`, `hide_label` |
+| `select.html` | `ChoiceField` or relational fields | `hide_label` |
+| `radio.html` | `ChoiceField` or relational fields | `inline`, `hide_label` |
+| `select_multiple.html` | `MultipleChoiceField` or relational fields with `many=True` | `hide_label` |
+| `checkbox_multiple.html` | `MultipleChoiceField` or relational fields with `many=True` | `inline`, `hide_label` |
+| `checkbox.html` | `BooleanField` | `hide_label` |
+| `fieldset.html` | Nested serializer | `hide_label` |
+| `list_fieldset.html` | `ListField` or nested serializer with `many=True` | `hide_label` |
+
+### Customization Examples
+
+**Textarea Field:**
+
+```python
+comment = serializers.CharField(
+    max_length=1000,
+    style={'base_template': 'textarea.html', 'rows': 10}
+)
+```
+
+**Hidden Field:**
+
+```python
+user_id = serializers.IntegerField(
+    style={'base_template': 'input.html', 'input_type': 'hidden'}
+)
+```
+
+**Custom Placeholder:**
+
+```python
+search = serializers.CharField(
+    style={
+        'base_template': 'input.html',
+        'placeholder': 'Search users...',
+        'autofocus': True
+    }
+)
+```
+
+**Radio Buttons (Inline):**
+
+```python
+gender = serializers.ChoiceField(
+    choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')],
+    style={'base_template': 'radio.html', 'inline': True}
+)
+```
+
+### Custom Templates
+
+Use a completely custom template:
+
+```python
+details = serializers.CharField(
+    max_length=1000,
+    style={'template': 'my-field-templates/custom-input.html'}
+)
+```
+
+**Custom Template (custom-input.html):**
+
+```django
+<div class="form-group">
+  <label for="{{ field.name }}">{{ field.label }}</label>
+  <div class="custom-input-wrapper">
+    <input type="text" 
+           name="{{ field.name }}" 
+           value="{{ field.value|default:'' }}"
+           class="form-control custom-input"
+           {%% if field.style.placeholder %%}placeholder="{{ field.style.placeholder }}"{%% endif %%}>
+  </div>
+  {%% if field.errors %%}
+    <div class="text-danger">{{ field.errors }}</div>
+  {%% endif %%}
+</div>
+```
+
+## Advanced Usage
+
+### Handling Form Validation Errors
+
+```python
+class ProfileUpdate(APIView):
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name = 'profile_form.html'
+
+    def post(self, request, pk):
+        profile = get_object_or_404(Profile, pk=pk)
+        serializer = ProfileSerializer(profile, data=request.data)
+        
+        if not serializer.is_valid():
+            # Re-render form with errors
+            return Response(
+                {'serializer': serializer, 'profile': profile},
+                status=400
+            )
+        
+        serializer.save()
+        return redirect('profile-detail', pk=pk)
+```
+
+**Template with Error Display:**
+
+```django
+{%% load rest_framework %%}
+
+<form method="post">
+  {%% csrf_token %%}
+  
+  {%% if serializer.errors %%}
+    <div class="alert alert-danger">
+      <strong>Please correct the errors below:</strong>
+      <ul>
+        {%% for field, errors in serializer.errors.items %%}
+          <li>{{ field }}: {{ errors|join:", " }}</li>
+        {%% endfor %%}
+      </ul>
+    </div>
+  {%% endif %%}
+  
+  {%% render_form serializer %%}
+  <button type="submit" class="btn btn-primary">Save</button>
+</form>
+```
+
+### Multiple Forms on One Page
+
+```python
+class ProfileAndSettings(APIView):
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name = 'profile_and_settings.html'
+
+    def get(self, request, pk):
+        profile = get_object_or_404(Profile, pk=pk)
+        profile_serializer = ProfileSerializer(profile)
+        settings_serializer = SettingsSerializer(profile.settings)
+        
+        return Response({
+            'profile_serializer': profile_serializer,
+            'settings_serializer': settings_serializer,
+            'profile': profile
+        })
+```
+
+**Template:**
+
+```django
+{%% load rest_framework %%}
+
+<h2>Profile Information</h2>
+<form action="{%% url 'update-profile' pk=profile.pk %%}" method="post">
+  {%% csrf_token %%}
+  {%% render_form profile_serializer %%}
+  <button type="submit">Save Profile</button>
+</form>
+
+<h2>Settings</h2>
+<form action="{%% url 'update-settings' pk=profile.pk %%}" method="post">
+  {%% csrf_token %%}
+  {%% render_form settings_serializer %%}
+  <button type="submit">Save Settings</button>
+</form>
+```
+
+### File Upload Forms
+
+```python
+class DocumentUpload(APIView):
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name = 'upload.html'
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        serializer = DocumentSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return redirect('document-list')
+        return Response({'serializer': serializer})
+```
+
+**Serializer:**
+
+```python
+class DocumentSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=200)
+    file = serializers.FileField()
+    description = serializers.CharField(
+        required=False,
+        style={'base_template': 'textarea.html'}
+    )
+```
+
+**Template:**
+
+```django
+{%% load rest_framework %%}
+
+<form method="post" enctype="multipart/form-data">
+  {%% csrf_token %%}
+  {%% render_form serializer %%}
+  <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+```
+
+## Template Tags Reference
+
+The `rest_framework` template tag library provides several useful tags:
+
+### render_form
+
+Render a serializer as a form:
+
+```django
+{%% load rest_framework %%}
+{%% render_form serializer template_pack='rest_framework/horizontal' %%}
+```
+
+### render_field
+
+Render a single field:
+
+```django
+{%% load rest_framework %%}
+{%% render_field serializer.email %%}
+```
+
+### add_query_param
+
+Add a query parameter to the current URL:
+
+```django
+{%% load rest_framework %%}
+<a href="{%% add_query_param request 'page' 2 %%}">Next Page</a>
+```
+
+See the [template tags documentation](/topics/html-and-forms) for the complete reference.
+
+## Related Resources
+
+- [Renderers](/api/renderers) - `TemplateHTMLRenderer` and `StaticHTMLRenderer` details
+- [Serializers](/api/serializers) - Serializer field options
+- [Template Tags](/topics/html-and-forms) - Complete template tag reference
+- [Browsable API](/topics/browsable-api) - Interactive HTML API interface

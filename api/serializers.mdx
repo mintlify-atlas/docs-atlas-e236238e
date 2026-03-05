@@ -1,0 +1,505 @@
+---
+title: Serializers
+description: API reference for Django REST Framework serializer classes
+---
+
+Serializers allow complex data such as querysets and model instances to be converted to native Python datatypes that can then be easily rendered into JSON, XML or other content types. Serializers also provide deserialization, allowing parsed data to be converted back into complex types, after first validating the incoming data.
+
+## Serializer
+
+Base serializer class for custom serialization logic.
+
+### Class Signature
+
+```python
+class Serializer(
+    instance=None,
+    data=empty,
+    partial=False,
+    context=None,
+    many=False,
+    **kwargs
+)
+```
+
+<ParamField path="instance" type="object">
+  Object instance to serialize. If not provided, the serializer will be used for deserialization only.
+</ParamField>
+
+<ParamField path="data" type="dict">
+  Input data for deserialization. When provided, the serializer will validate and deserialize the data.
+</ParamField>
+
+<ParamField path="partial" type="bool" default="False">
+  Allow partial updates. When `True`, all fields are optional during validation.
+</ParamField>
+
+<ParamField path="context" type="dict" default="{}">
+  Additional context data passed to the serializer. Accessible via `self.context`.
+</ParamField>
+
+<ParamField path="many" type="bool" default="False">
+  Serialize a list of objects instead of a single object. Creates a `ListSerializer` instance.
+</ParamField>
+
+### Methods
+
+#### is_valid()
+
+Validate the input data.
+
+```python
+def is_valid(raise_exception=False)
+```
+
+<ParamField path="raise_exception" type="bool" default="False">
+  If `True`, raises `ValidationError` when validation fails.
+</ParamField>
+
+Returns `True` if data is valid, `False` otherwise.
+
+#### save()
+
+Persist the validated data into an object instance.
+
+```python
+def save(**kwargs)
+```
+
+<ParamField path="**kwargs" type="dict">
+  Additional keyword arguments to merge with `validated_data`.
+</ParamField>
+
+Calls `create()` for new instances or `update()` for existing instances. Returns the saved object instance.
+
+#### create()
+
+Create and return a new object instance from validated data.
+
+```python
+def create(validated_data)
+```
+
+<ParamField path="validated_data" type="dict">
+  Dictionary of validated data.
+</ParamField>
+
+Must be implemented for serializers that support creation.
+
+#### update()
+
+Update and return an existing object instance from validated data.
+
+```python
+def update(instance, validated_data)
+```
+
+<ParamField path="instance" type="object">
+  The existing object instance to update.
+</ParamField>
+
+<ParamField path="validated_data" type="dict">
+  Dictionary of validated data.
+</ParamField>
+
+Must be implemented for serializers that support updates.
+
+#### validate()
+
+Object-level validation. Override to add custom validation logic.
+
+```python
+def validate(attrs)
+```
+
+<ParamField path="attrs" type="dict">
+  Dictionary of field values.
+</ParamField>
+
+Returns the validated dictionary or raises `ValidationError`.
+
+#### to_representation()
+
+Convert object instance to primitive data types.
+
+```python
+def to_representation(instance)
+```
+
+<ParamField path="instance" type="object">
+  The object instance to serialize.
+</ParamField>
+
+Returns a dictionary of primitive datatypes.
+
+#### to_internal_value()
+
+Convert primitive data types to Python objects.
+
+```python
+def to_internal_value(data)
+```
+
+<ParamField path="data" type="dict">
+  Dictionary of primitive datatypes.
+</ParamField>
+
+Returns a dictionary of native Python objects.
+
+### Properties
+
+#### data
+
+Returns the serialized representation. Must call `is_valid()` first if data was passed to the serializer.
+
+```python
+serializer.data  # Returns dict or list
+```
+
+#### errors
+
+Returns validation errors. Only available after calling `is_valid()`.
+
+```python
+serializer.errors  # Returns dict of error messages
+```
+
+#### validated_data
+
+Returns the validated data. Only available after calling `is_valid()`.
+
+```python
+serializer.validated_data  # Returns dict
+```
+
+#### initial_data
+
+Returns the raw input data passed to the serializer.
+
+```python
+serializer.initial_data  # Returns dict
+```
+
+### Example
+
+```python
+from rest_framework import serializers
+
+class CommentSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    content = serializers.CharField(max_length=200)
+    created = serializers.DateTimeField()
+
+    def create(self, validated_data):
+        return Comment.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        instance.email = validated_data.get('email', instance.email)
+        instance.content = validated_data.get('content', instance.content)
+        instance.save()
+        return instance
+```
+
+---
+
+## ModelSerializer
+
+Serializer class that automatically generates fields based on a Django model.
+
+### Class Signature
+
+```python
+class ModelSerializer(Serializer):
+    class Meta:
+        model = None
+        fields = None
+        exclude = None
+        read_only_fields = None
+        extra_kwargs = None
+        depth = 0
+```
+
+### Meta Options
+
+<ParamField path="model" type="Model class" required>
+  The Django model class to serialize.
+</ParamField>
+
+<ParamField path="fields" type="list | tuple | '__all__'" required>
+  List of field names to include. Use `'__all__'` for all model fields.
+</ParamField>
+
+<ParamField path="exclude" type="list | tuple">
+  List of field names to exclude. Cannot be used with `fields`.
+</ParamField>
+
+<ParamField path="read_only_fields" type="list | tuple">
+  List of field names to mark as read-only.
+</ParamField>
+
+<ParamField path="extra_kwargs" type="dict">
+  Dictionary mapping field names to dictionaries of additional keyword arguments.
+</ParamField>
+
+<ParamField path="depth" type="int" default="0">
+  Depth of nested relationships to automatically serialize (0-10).
+</ParamField>
+
+### Methods
+
+#### create()
+
+Create a model instance from validated data.
+
+```python
+def create(validated_data)
+```
+
+Automatically handles many-to-many relationships and foreign keys.
+
+#### update()
+
+Update a model instance from validated data.
+
+```python
+def update(instance, validated_data)
+```
+
+Automatically handles many-to-many relationships and foreign keys.
+
+### Field Mapping
+
+The following Django model fields are automatically mapped to serializer fields:
+
+| Model Field | Serializer Field |
+|-------------|------------------|
+| `AutoField` | `IntegerField` |
+| `BigAutoField` | `BigIntegerField` |
+| `BooleanField` | `BooleanField` |
+| `CharField` | `CharField` |
+| `DateField` | `DateField` |
+| `DateTimeField` | `DateTimeField` |
+| `DecimalField` | `DecimalField` |
+| `EmailField` | `EmailField` |
+| `FileField` | `FileField` |
+| `FloatField` | `FloatField` |
+| `ImageField` | `ImageField` |
+| `IntegerField` | `IntegerField` |
+| `SlugField` | `SlugField` |
+| `TextField` | `CharField` |
+| `URLField` | `URLField` |
+| `UUIDField` | `UUIDField` |
+| `ForeignKey` | `PrimaryKeyRelatedField` |
+| `ManyToManyField` | `PrimaryKeyRelatedField(many=True)` |
+
+### Example
+
+```python
+from rest_framework import serializers
+from myapp.models import Account
+
+class AccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Account
+        fields = ['id', 'account_name', 'users', 'created']
+        read_only_fields = ['created']
+        extra_kwargs = {
+            'account_name': {'max_length': 100}
+        }
+```
+
+---
+
+## HyperlinkedModelSerializer
+
+Model serializer that uses hyperlinks for relationships instead of primary keys.
+
+### Class Signature
+
+```python
+class HyperlinkedModelSerializer(ModelSerializer):
+    serializer_url_field = HyperlinkedIdentityField
+    serializer_related_field = HyperlinkedRelatedField
+```
+
+### Differences from ModelSerializer
+
+- Includes a `url` field by default (instead of `id`)
+- Uses `HyperlinkedRelatedField` for relationships
+- Requires `request` in serializer context
+
+### Example
+
+```python
+from rest_framework import serializers
+
+class AccountSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Account
+        fields = ['url', 'account_name', 'users', 'created']
+
+# Usage
+serializer = AccountSerializer(
+    queryset,
+    context={'request': request}
+)
+```
+
+---
+
+## ListSerializer
+
+Serializer for validating and serializing multiple objects at once.
+
+### Class Signature
+
+```python
+class ListSerializer(
+    instance=None,
+    data=empty,
+    child=None,
+    allow_empty=True,
+    max_length=None,
+    min_length=None,
+    **kwargs
+)
+```
+
+<ParamField path="child" type="Serializer" required>
+  The serializer instance for individual items.
+</ParamField>
+
+<ParamField path="allow_empty" type="bool" default="True">
+  Allow empty lists as valid input.
+</ParamField>
+
+<ParamField path="max_length" type="int">
+  Maximum number of items in the list.
+</ParamField>
+
+<ParamField path="min_length" type="int">
+  Minimum number of items in the list.
+</ParamField>
+
+### Methods
+
+#### create()
+
+Create multiple instances from validated data.
+
+```python
+def create(validated_data)
+```
+
+Default implementation calls `child.create()` for each item.
+
+#### update()
+
+Update multiple instances from validated data.
+
+```python
+def update(instance, validated_data)
+```
+
+Not supported by default. Must be explicitly implemented.
+
+### Example
+
+```python
+class BookListSerializer(serializers.ListSerializer):
+    def create(self, validated_data):
+        books = [Book(**item) for item in validated_data]
+        return Book.objects.bulk_create(books)
+
+class BookSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=100)
+    author = serializers.CharField(max_length=100)
+
+    class Meta:
+        list_serializer_class = BookListSerializer
+```
+
+---
+
+## BaseSerializer
+
+Minimal base class for custom serializers.
+
+### Class Signature
+
+```python
+class BaseSerializer(
+    instance=None,
+    data=empty,
+    partial=False,
+    context=None,
+    **kwargs
+)
+```
+
+### Methods to Override
+
+#### to_representation()
+
+Serialize an object instance.
+
+```python
+def to_representation(instance)
+```
+
+Required for serialization.
+
+#### to_internal_value()
+
+Deserialize primitive data.
+
+```python
+def to_internal_value(data)
+```
+
+Required for deserialization.
+
+#### create()
+
+Create new instance.
+
+```python
+def create(validated_data)
+```
+
+Optional. Required for `.save()` support on new objects.
+
+#### update()
+
+Update existing instance.
+
+```python
+def update(instance, validated_data)
+```
+
+Optional. Required for `.save()` support on existing objects.
+
+### Example
+
+```python
+class HighScoreSerializer(serializers.BaseSerializer):
+    def to_representation(self, instance):
+        return {
+            'score': instance.score,
+            'player_name': instance.player_name
+        }
+
+    def to_internal_value(self, data):
+        score = data.get('score')
+        player_name = data.get('player_name')
+
+        if not score:
+            raise serializers.ValidationError({
+                'score': 'This field is required.'
+            })
+
+        return {
+            'score': int(score),
+            'player_name': player_name
+        }
+```

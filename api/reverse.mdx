@@ -1,0 +1,278 @@
+---
+title: Reverse URLs
+description: API reference for Django REST Framework URL reversing utilities
+---
+
+DRF provides utilities for reversing URLs that integrate with versioning and format suffixes.
+
+## reverse
+
+Reverse a URL, returning a fully qualified URL if a request is provided.
+
+```python
+from rest_framework.reverse import reverse
+
+url = reverse('user-detail', args=[user.id], request=request)
+# Returns: 'http://example.com/api/users/123/'
+```
+
+### Signature
+
+```python
+reverse(
+    viewname,
+    args=None,
+    kwargs=None,
+    request=None,
+    format=None,
+    **extra
+)
+```
+
+### Parameters
+
+<ParamField path="viewname" type="str" required>
+  The name of the URL pattern to reverse
+</ParamField>
+
+<ParamField path="args" type="list">
+  Positional arguments for the URL pattern
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments for the URL pattern
+</ParamField>
+
+<ParamField path="request" type="Request">
+  If provided, returns a fully qualified URL. Also enables versioning support
+</ParamField>
+
+<ParamField path="format" type="str">
+  Format suffix to append to the URL (e.g., `'json'`)
+</ParamField>
+
+<ParamField path="**extra" type="dict">
+  Additional keyword arguments passed to Django's `reverse()`
+</ParamField>
+
+### Returns
+
+A URL string. If `request` is provided, returns a fully qualified URL including the scheme and hostname.
+
+---
+
+## reverse_lazy
+
+Lazy version of `reverse()` that delays evaluation until the URL is actually needed.
+
+```python
+from rest_framework.reverse import reverse_lazy
+
+url = reverse_lazy('user-detail', args=[user.id])
+```
+
+Useful for:
+- Class-level URL definitions
+- URLs needed at import time
+- URLs in model definitions
+
+---
+
+## Usage Examples
+
+### Basic Usage
+
+```python
+from rest_framework.reverse import reverse
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class UserDetail(APIView):
+    def get(self, request, pk):
+        user = User.objects.get(pk=pk)
+        # Generate URL for related resource
+        posts_url = reverse('user-posts', args=[pk], request=request)
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'posts_url': posts_url,
+        })
+```
+
+### With Format Suffixes
+
+```python
+from rest_framework.reverse import reverse
+
+# Generate URL with JSON format suffix
+url = reverse('user-detail', args=[123], request=request, format='json')
+# Returns: 'http://example.com/api/users/123.json'
+```
+
+### With Versioning
+
+```python
+from rest_framework.reverse import reverse
+
+# When using versioning, reverse() automatically includes the version
+url = reverse('user-detail', args=[123], request=request)
+# With URLPathVersioning: 'http://example.com/v1/users/123/'
+# With QueryParameterVersioning: 'http://example.com/users/123/?version=v1'
+```
+
+### In Serializers
+
+```python
+from rest_framework import serializers
+from rest_framework.reverse import reverse
+
+class UserSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    posts_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'url', 'posts_url']
+    
+    def get_url(self, obj):
+        request = self.context.get('request')
+        return reverse('user-detail', args=[obj.id], request=request)
+    
+    def get_posts_url(self, obj):
+        request = self.context.get('request')
+        return reverse('user-posts', args=[obj.id], request=request)
+```
+
+### Without Request (Relative URLs)
+
+```python
+from rest_framework.reverse import reverse
+
+# Without request, returns relative URL
+url = reverse('user-detail', args=[123])
+# Returns: '/api/users/123/'
+```
+
+### With Current App
+
+```python
+from rest_framework.reverse import reverse
+
+# Use current_app parameter for namespaced URLs
+url = reverse(
+    'user-detail',
+    args=[123],
+    request=request,
+    current_app='api_v2'
+)
+```
+
+---
+
+## Integration with Versioning
+
+The `reverse()` function automatically integrates with versioning schemes:
+
+### URLPathVersioning
+
+```python
+# With URLPathVersioning
+request.version = 'v1'
+url = reverse('user-detail', args=[123], request=request)
+# Returns: 'http://example.com/v1/users/123/'
+```
+
+### NamespaceVersioning
+
+```python
+# With NamespaceVersioning
+request.version = 'v2'
+url = reverse('user-detail', args=[123], request=request)
+# Internally reverses 'v2:user-detail'
+# Returns: 'http://example.com/v2/users/123/'
+```
+
+### QueryParameterVersioning
+
+```python
+# With QueryParameterVersioning
+request.version = 'v1'
+url = reverse('user-detail', args=[123], request=request)
+# Returns: 'http://example.com/users/123/?version=v1'
+```
+
+### AcceptHeaderVersioning
+
+```python
+# With AcceptHeaderVersioning (no URL modification)
+request.version = '1.0'
+url = reverse('user-detail', args=[123], request=request)
+# Returns: 'http://example.com/users/123/'
+# Version is in Accept header, not URL
+```
+
+---
+
+## preserve_builtin_query_params
+
+Internal function that preserves built-in query parameters when generating URLs.
+
+```python
+from rest_framework.reverse import preserve_builtin_query_params
+
+url = preserve_builtin_query_params(url, request)
+```
+
+Automatically preserves:
+- Format override parameter (`URL_FORMAT_OVERRIDE` setting)
+
+---
+
+## Comparison with Django's reverse()
+
+| Feature | Django `reverse()` | DRF `reverse()` |
+|---------|-------------------|------------------|
+| Basic URL reversal | Yes | Yes |
+| Fully qualified URLs | No | Yes (with `request`) |
+| Format suffixes | No | Yes (with `format`) |
+| Versioning support | No | Yes (automatic) |
+| Query parameter preservation | No | Yes (automatic) |
+
+---
+
+## Best Practices
+
+### Always Pass Request in Serializers
+
+```python
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = User
+        fields = ['url', 'username']
+
+# In view, always pass request in context
+serializer = UserSerializer(user, context={'request': request})
+```
+
+### Use HyperlinkedModelSerializer
+
+For automatic URL generation:
+
+```python
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = User
+        fields = ['url', 'username', 'posts']
+
+# Automatically generates URLs using reverse()
+```
+
+### Handle Missing Request Gracefully
+
+```python
+def get_user_url(user, request=None):
+    try:
+        return reverse('user-detail', args=[user.id], request=request)
+    except NoReverseMatch:
+        return None
+```

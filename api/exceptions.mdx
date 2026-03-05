@@ -1,0 +1,478 @@
+---
+title: 'Exceptions'
+description: 'Exception classes for handling API errors with appropriate HTTP status codes'
+---
+
+REST framework's views handle various exceptions and return appropriate error responses. All API exceptions are subclasses of `APIException`.
+
+## Exception Handling
+
+REST framework handles the following exceptions automatically:
+
+- Subclasses of `APIException` raised inside REST framework
+- Django's `Http404` exception
+- Django's `PermissionDenied` exception
+
+In each case, REST framework returns a response with an appropriate status code and content-type. The response body includes details about the error.
+
+```python
+# Example error response
+{
+    "detail": "Method 'DELETE' not allowed."
+}
+```
+
+## Base Exception Class
+
+### APIException
+
+```python
+from rest_framework.exceptions import APIException
+
+APIException(detail=None, code=None)
+```
+
+Base class for all REST framework exceptions.
+
+<ParamField path="detail" type="str | dict | list" default="None">
+  Error message or structured error details. Defaults to the class's `default_detail`.
+</ParamField>
+
+<ParamField path="code" type="str" default="None">
+  Error code identifier. Defaults to the class's `default_code`.
+</ParamField>
+
+**Class Attributes:**
+
+- `status_code` - HTTP status code (default: 500)
+- `default_detail` - Default error message
+- `default_code` - Default error code
+
+**Methods:**
+
+- `.get_codes()` - Returns just the error codes
+- `.get_full_details()` - Returns both messages and codes
+
+```python
+# Custom exception
+class ServiceUnavailable(APIException):
+    status_code = 503
+    default_detail = 'Service temporarily unavailable, try again later.'
+    default_code = 'service_unavailable'
+```
+
+#### Inspecting Exceptions
+
+```python
+try:
+    # Some operation
+    raise PermissionDenied()
+except APIException as exc:
+    print(exc.detail)
+    # "You do not have permission to perform this action."
+    
+    print(exc.get_codes())
+    # "permission_denied"
+    
+    print(exc.get_full_details())
+    # {'message': 'You do not have permission...', 'code': 'permission_denied'}
+```
+
+For validation errors, details are structured:
+
+```python
+try:
+    serializer.is_valid(raise_exception=True)
+except ValidationError as exc:
+    print(exc.detail)
+    # {'name': ['This field is required.'], 'age': ['A valid integer is required.']}
+    
+    print(exc.get_codes())
+    # {'name': ['required'], 'age': ['invalid']}
+    
+    print(exc.get_full_details())
+    # {'name': [{'message': 'This field is required.', 'code': 'required'}], ...}
+```
+
+## Client Error Exceptions (4xx)
+
+### ParseError
+
+```python
+from rest_framework.exceptions import ParseError
+
+ParseError(detail=None, code=None)
+```
+
+Raised when the request contains malformed data when accessing `request.data`.
+
+- **Status Code:** `400 Bad Request`
+- **Default Detail:** "Malformed request."
+- **Default Code:** `parse_error`
+
+```python
+from rest_framework.exceptions import ParseError
+
+if not is_valid_json(request.body):
+    raise ParseError("Invalid JSON in request body")
+```
+
+### ValidationError
+
+```python
+from rest_framework.exceptions import ValidationError
+
+ValidationError(detail=None, code=None)
+```
+
+Raised for validation failures. The `detail` argument may be a list, dictionary, or nested data structure.
+
+- **Status Code:** `400 Bad Request`
+- **Default Detail:** "Invalid input."
+- **Default Code:** `invalid`
+
+```python
+from rest_framework import serializers
+
+# Field-level validation
+raise serializers.ValidationError({
+    'email': 'Invalid email address',
+    'age': 'Must be 18 or older'
+})
+
+# Object-level validation
+raise serializers.ValidationError('Passwords do not match')
+
+# Using in serializers
+serializer = MySerializer(data=request.data)
+serializer.is_valid(raise_exception=True)  # Raises ValidationError if invalid
+```
+
+<Info>
+  Use the fully qualified `serializers.ValidationError` to differentiate from Django's built-in `ValidationError`.
+</Info>
+
+### AuthenticationFailed
+
+```python
+from rest_framework.exceptions import AuthenticationFailed
+
+AuthenticationFailed(detail=None, code=None)
+```
+
+Raised when an incoming request includes incorrect authentication.
+
+- **Status Code:** `401 Unauthorized` (or `403 Forbidden` depending on authentication scheme)
+- **Default Detail:** "Incorrect authentication credentials."
+- **Default Code:** `authentication_failed`
+
+```python
+from rest_framework.exceptions import AuthenticationFailed
+
+def authenticate(self, request):
+    token = request.META.get('HTTP_AUTHORIZATION')
+    if not token:
+        return None
+    
+    user = validate_token(token)
+    if not user:
+        raise AuthenticationFailed('Invalid token')
+    
+    return (user, token)
+```
+
+### NotAuthenticated
+
+```python
+from rest_framework.exceptions import NotAuthenticated
+
+NotAuthenticated(detail=None, code=None)
+```
+
+Raised when an unauthenticated request fails permission checks.
+
+- **Status Code:** `401 Unauthorized` (or `403 Forbidden` depending on authentication scheme)
+- **Default Detail:** "Authentication credentials were not provided."
+- **Default Code:** `not_authenticated`
+
+```python
+from rest_framework.exceptions import NotAuthenticated
+
+def check_permissions(self, request):
+    if not request.user or not request.user.is_authenticated:
+        raise NotAuthenticated()
+```
+
+### PermissionDenied
+
+```python
+from rest_framework.exceptions import PermissionDenied
+
+PermissionDenied(detail=None, code=None)
+```
+
+Raised when an authenticated request fails permission checks.
+
+- **Status Code:** `403 Forbidden`
+- **Default Detail:** "You do not have permission to perform this action."
+- **Default Code:** `permission_denied`
+
+```python
+from rest_framework.exceptions import PermissionDenied
+
+def check_object_permissions(self, request, obj):
+    if obj.owner != request.user:
+        raise PermissionDenied('You do not own this resource')
+```
+
+### NotFound
+
+```python
+from rest_framework.exceptions import NotFound
+
+NotFound(detail=None, code=None)
+```
+
+Raised when a resource does not exist. Equivalent to Django's `Http404`.
+
+- **Status Code:** `404 Not Found`
+- **Default Detail:** "Not found."
+- **Default Code:** `not_found`
+
+```python
+from rest_framework.exceptions import NotFound
+
+def get_object(self, pk):
+    try:
+        return MyModel.objects.get(pk=pk)
+    except MyModel.DoesNotExist:
+        raise NotFound(f'Object with id {pk} not found')
+```
+
+### MethodNotAllowed
+
+```python
+from rest_framework.exceptions import MethodNotAllowed
+
+MethodNotAllowed(method, detail=None, code=None)
+```
+
+Raised when an incoming request uses a method not supported by the view.
+
+- **Status Code:** `405 Method Not Allowed`
+- **Default Detail:** 'Method "{method}" not allowed.'
+- **Default Code:** `method_not_allowed`
+
+<ParamField path="method" type="str" required>
+  The HTTP method that was not allowed
+</ParamField>
+
+```python
+from rest_framework.exceptions import MethodNotAllowed
+
+if request.method not in ['GET', 'POST']:
+    raise MethodNotAllowed(request.method)
+```
+
+### NotAcceptable
+
+```python
+from rest_framework.exceptions import NotAcceptable
+
+NotAcceptable(detail=None, code=None, available_renderers=None)
+```
+
+Raised when the request's `Accept` header cannot be satisfied by any available renderer.
+
+- **Status Code:** `406 Not Acceptable`
+- **Default Detail:** "Could not satisfy the request Accept header."
+- **Default Code:** `not_acceptable`
+
+<ParamField path="available_renderers" type="list" default="None">
+  List of available renderer instances
+</ParamField>
+
+### UnsupportedMediaType
+
+```python
+from rest_framework.exceptions import UnsupportedMediaType
+
+UnsupportedMediaType(media_type, detail=None, code=None)
+```
+
+Raised when no parser can handle the request's content type.
+
+- **Status Code:** `415 Unsupported Media Type`
+- **Default Detail:** 'Unsupported media type "{media_type}" in request.'
+- **Default Code:** `unsupported_media_type`
+
+<ParamField path="media_type" type="str" required>
+  The media type that was not supported
+</ParamField>
+
+```python
+from rest_framework.exceptions import UnsupportedMediaType
+
+if content_type not in supported_types:
+    raise UnsupportedMediaType(content_type)
+```
+
+### Throttled
+
+```python
+from rest_framework.exceptions import Throttled
+
+Throttled(wait=None, detail=None, code=None)
+```
+
+Raised when a request fails throttling checks.
+
+- **Status Code:** `429 Too Many Requests`
+- **Default Detail:** "Request was throttled."
+- **Default Code:** `throttled`
+
+<ParamField path="wait" type="int | float" default="None">
+  Number of seconds to wait before retrying. Automatically added to the error message.
+</ParamField>
+
+```python
+from rest_framework.exceptions import Throttled
+
+if rate_limit_exceeded(request):
+    raise Throttled(wait=60)  # Client should wait 60 seconds
+```
+
+The `wait` parameter is included in the response:
+
+```json
+{
+    "detail": "Request was throttled. Expected available in 60 seconds."
+}
+```
+
+## Custom Exception Handling
+
+You can implement custom exception handling to control error response format.
+
+```python
+from rest_framework.views import exception_handler
+
+def custom_exception_handler(exc, context):
+    # Call REST framework's default exception handler first
+    response = exception_handler(exc, context)
+    
+    if response is not None:
+        # Add HTTP status code to response body
+        response.data['status_code'] = response.status_code
+        
+        # Add custom error tracking ID
+        response.data['error_id'] = generate_error_id()
+    
+    return response
+```
+
+Configure in settings:
+
+```python
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'my_project.utils.custom_exception_handler'
+}
+```
+
+The `context` argument contains additional information:
+
+- `context['view']` - The view that raised the exception
+- `context['args']` - View args
+- `context['kwargs']` - View kwargs
+- `context['request']` - The request object
+
+## Generic Error Views
+
+DRF provides error views for returning JSON error responses.
+
+### server_error
+
+```python
+from rest_framework.exceptions import server_error
+
+# In urls.py
+handler500 = 'rest_framework.exceptions.server_error'
+```
+
+Returns a response with status code `500` and `application/json` content type:
+
+```json
+{
+    "error": "Server Error (500)"
+}
+```
+
+### bad_request
+
+```python
+from rest_framework.exceptions import bad_request
+
+# In urls.py
+handler400 = 'rest_framework.exceptions.bad_request'
+```
+
+Returns a response with status code `400` and `application/json` content type:
+
+```json
+{
+    "error": "Bad Request (400)"
+}
+```
+
+## Example Usage
+
+### In Views
+
+```python
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework import status
+
+class ArticleDetail(APIView):
+    def get(self, request, pk):
+        try:
+            article = Article.objects.get(pk=pk)
+        except Article.DoesNotExist:
+            raise NotFound(f'Article {pk} does not exist')
+        
+        if not article.is_published and article.author != request.user:
+            raise PermissionDenied('This article is not published')
+        
+        serializer = ArticleSerializer(article)
+        return Response(serializer.data)
+```
+
+### In Serializers
+
+```python
+from rest_framework import serializers
+
+class UserSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    age = serializers.IntegerField()
+    
+    def validate_age(self, value):
+        if value < 18:
+            raise serializers.ValidationError('Must be 18 or older')
+        return value
+    
+    def validate(self, data):
+        # Object-level validation
+        if User.objects.filter(email=data['email']).exists():
+            raise serializers.ValidationError({
+                'email': 'Email already registered'
+            })
+        return data
+```
+
+## See Also
+
+- [Status Codes](/api/status-codes) - HTTP status code constants
+- [Response](/api/responses) - Response class
+- [Request](/api/requests) - Request class

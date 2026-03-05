@@ -1,0 +1,630 @@
+---
+title: Generic Views
+description: Generic class-based views API reference
+---
+
+## GenericAPIView
+
+**Signature:** `class GenericAPIView(APIView)`
+
+Extends `APIView`, adding commonly required behavior for standard list and detail views.
+
+Each of the concrete generic views is built by combining `GenericAPIView` with one or more mixin classes.
+
+### Class Attributes
+
+#### queryset
+
+The queryset that should be used for returning objects from this view.
+
+**Type:** `QuerySet | None`
+
+**Default:** `None`
+
+```python
+from rest_framework import generics
+from myapp.models import MyModel
+from myapp.serializers import MyModelSerializer
+
+class MyListView(generics.ListAPIView):
+    queryset = MyModel.objects.all()
+    serializer_class = MyModelSerializer
+```
+
+<Warning>
+You must either set this attribute or override `get_queryset()`. If overriding a view method, call `get_queryset()` instead of accessing this property directly, as `queryset` will get evaluated only once and those results are cached for all subsequent requests.
+</Warning>
+
+#### serializer_class
+
+The serializer class that should be used for validating and deserializing input, and for serializing output.
+
+**Type:** `Serializer | None`
+
+**Default:** `None`
+
+<Note>
+You must either set this attribute or override `get_serializer_class()`.
+</Note>
+
+#### lookup_field
+
+The model field that should be used for performing object lookup of individual model instances.
+
+**Type:** `str`
+
+**Default:** `'pk'`
+
+```python
+class MyDetailView(generics.RetrieveAPIView):
+    queryset = MyModel.objects.all()
+    serializer_class = MyModelSerializer
+    lookup_field = 'slug'
+```
+
+<Note>
+When using hyperlinked APIs, ensure that both the API views and the serializer classes set the lookup fields if you need to use a custom value.
+</Note>
+
+#### lookup_url_kwarg
+
+The URL keyword argument that should be used for object lookup. The URL conf should include a keyword argument corresponding to this value.
+
+**Type:** `str | None`
+
+**Default:** `None` (defaults to using the same value as `lookup_field`)
+
+#### filter_backends
+
+A list of filter backend classes that should be used for filtering the queryset.
+
+**Type:** `list[class]`
+
+**Default:** `api_settings.DEFAULT_FILTER_BACKENDS`
+
+#### pagination_class
+
+The pagination class that should be used when paginating list results.
+
+**Type:** `class | None`
+
+**Default:** `api_settings.DEFAULT_PAGINATION_CLASS`
+
+```python
+from rest_framework.pagination import PageNumberPagination
+
+class MyListView(generics.ListAPIView):
+    queryset = MyModel.objects.all()
+    serializer_class = MyModelSerializer
+    pagination_class = PageNumberPagination
+```
+
+Set `pagination_class=None` to disable pagination on this view.
+
+### Instance Methods
+
+#### get_queryset()
+
+**Signature:** `get_queryset()`
+
+Returns the queryset that should be used for list views, and as the base for lookups in detail views.
+
+**Returns:** `QuerySet`
+
+```python
+def get_queryset(self):
+    user = self.request.user
+    return user.accounts.all()
+```
+
+<Note>
+This method should always be used rather than accessing `self.queryset` directly, as `self.queryset` gets evaluated only once and those results are cached for all subsequent requests.
+</Note>
+
+**Common use cases:**
+
+- Returning a queryset specific to the user making the request
+- Applying `select_related()` or `prefetch_related()` to optimize queries
+- Filtering based on URL kwargs or query parameters
+
+```python
+def get_queryset(self):
+    return Order.objects.select_related("customer", "billing_address")
+```
+
+#### get_object()
+
+**Signature:** `get_object()`
+
+Returns the object instance that should be used for detail views.
+
+**Returns:** `Model`
+
+**Raises:** `Http404`
+
+Defaults to using the `lookup_field` parameter to filter the base queryset. May be overridden to provide more complex behavior.
+
+```python
+def get_object(self):
+    queryset = self.get_queryset()
+    filter_kwargs = {
+        'account': self.kwargs['account'],
+        'username': self.kwargs['username']
+    }
+    obj = get_object_or_404(queryset, **filter_kwargs)
+    self.check_object_permissions(self.request, obj)
+    return obj
+```
+
+<Note>
+If your API doesn't include any object level permissions, you may optionally exclude the `self.check_object_permissions` check and simply return the object from the `get_object_or_404` lookup.
+</Note>
+
+#### get_serializer()
+
+**Signature:** `get_serializer(*args, **kwargs)`
+
+Returns a serializer instance.
+
+<ParamField path="args" type="tuple">
+  Positional arguments passed to the serializer.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments passed to the serializer.
+</ParamField>
+
+**Returns:** `Serializer`
+
+```python
+serializer = self.get_serializer(data=request.data)
+serializer.is_valid(raise_exception=True)
+```
+
+#### get_serializer_class()
+
+**Signature:** `get_serializer_class()`
+
+Returns the class to use for the serializer.
+
+**Returns:** `class`
+
+May be overridden to provide dynamic behavior, such as using different serializers for read and write operations.
+
+```python
+def get_serializer_class(self):
+    if self.request.user.is_staff:
+        return FullAccountSerializer
+    return BasicAccountSerializer
+```
+
+#### get_serializer_context()
+
+**Signature:** `get_serializer_context()`
+
+Returns a dictionary of extra context provided to the serializer class.
+
+**Returns:** `dict` - Contains `request`, `format`, and `view` keys
+
+```python
+def get_serializer_context(self):
+    context = super().get_serializer_context()
+    context['organization'] = self.request.user.organization
+    return context
+```
+
+#### filter_queryset()
+
+**Signature:** `filter_queryset(queryset)`
+
+Given a queryset, filter it with whichever filter backends are in use, returning a new queryset.
+
+<ParamField path="queryset" type="QuerySet" required>
+  The queryset to filter.
+</ParamField>
+
+**Returns:** `QuerySet`
+
+```python
+def filter_queryset(self, queryset):
+    filter_backends = [CategoryFilter]
+    
+    if 'geo_route' in self.request.query_params:
+        filter_backends = [GeoRouteFilter, CategoryFilter]
+    
+    for backend in filter_backends:
+        queryset = backend().filter_queryset(self.request, queryset, self)
+    
+    return queryset
+```
+
+#### paginate_queryset()
+
+**Signature:** `paginate_queryset(queryset)`
+
+Returns a single page of results, or `None` if pagination is disabled.
+
+<ParamField path="queryset" type="QuerySet" required>
+  The queryset to paginate.
+</ParamField>
+
+**Returns:** `list | None`
+
+#### get_paginated_response()
+
+**Signature:** `get_paginated_response(data)`
+
+Returns a paginated style `Response` object for the given output data.
+
+<ParamField path="data" type="list" required>
+  The paginated data.
+</ParamField>
+
+**Returns:** `Response`
+
+### Properties
+
+#### paginator
+
+The paginator instance associated with the view, or `None`.
+
+**Returns:** `BasePagination | None`
+
+---
+
+## Mixins
+
+The mixin classes provide action methods used to provide basic view behavior. They don't define handler methods like `.get()` and `.post()`, allowing flexible composition of behavior.
+
+Import from: `rest_framework.mixins`
+
+### ListModelMixin
+
+**Signature:** `class ListModelMixin`
+
+Provides a `.list()` action that implements listing a queryset.
+
+#### list()
+
+**Signature:** `list(request, *args, **kwargs)`
+
+If the queryset is populated, returns a `200 OK` response with a serialized representation of the queryset as the body. The response data may optionally be paginated.
+
+<ParamField path="request" type="Request" required>
+  The request instance.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+### CreateModelMixin
+
+**Signature:** `class CreateModelMixin`
+
+Provides a `.create()` action that implements creating and saving a new model instance.
+
+#### create()
+
+**Signature:** `create(request, *args, **kwargs)`
+
+If an object is created, returns a `201 Created` response with a serialized representation of the object. If the representation contains a key named `url`, the `Location` header will be populated with that value.
+
+If the request data is invalid, returns a `400 Bad Request` response with error details.
+
+<ParamField path="request" type="Request" required>
+  The request instance.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+#### perform_create()
+
+**Signature:** `perform_create(serializer)`
+
+Called by `create()` when saving a new object instance. Override to set attributes that are implicit in the request.
+
+<ParamField path="serializer" type="Serializer" required>
+  The serializer instance.
+</ParamField>
+
+```python
+def perform_create(self, serializer):
+    serializer.save(user=self.request.user)
+```
+
+### RetrieveModelMixin
+
+**Signature:** `class RetrieveModelMixin`
+
+Provides a `.retrieve()` action that implements returning an existing model instance in a response.
+
+#### retrieve()
+
+**Signature:** `retrieve(request, *args, **kwargs)`
+
+If an object can be retrieved, returns a `200 OK` response with a serialized representation of the object. Otherwise, returns a `404 Not Found`.
+
+<ParamField path="request" type="Request" required>
+  The request instance.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+### UpdateModelMixin
+
+**Signature:** `class UpdateModelMixin`
+
+Provides `.update()` and `.partial_update()` actions that implement updating and saving an existing model instance.
+
+#### update()
+
+**Signature:** `update(request, *args, **kwargs)`
+
+If an object is updated, returns a `200 OK` response with a serialized representation of the object.
+
+If the request data is invalid, returns a `400 Bad Request` response with error details.
+
+<ParamField path="request" type="Request" required>
+  The request instance.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+#### partial_update()
+
+**Signature:** `partial_update(request, *args, **kwargs)`
+
+Similar to `update()`, but all fields for the update will be optional. This allows support for HTTP `PATCH` requests.
+
+<ParamField path="request" type="Request" required>
+  The request instance.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+#### perform_update()
+
+**Signature:** `perform_update(serializer)`
+
+Called by `update()` when saving an existing object instance. Override to set attributes or trigger side effects.
+
+<ParamField path="serializer" type="Serializer" required>
+  The serializer instance.
+</ParamField>
+
+```python
+def perform_update(self, serializer):
+    instance = serializer.save()
+    send_email_confirmation(user=self.request.user, modified=instance)
+```
+
+### DestroyModelMixin
+
+**Signature:** `class DestroyModelMixin`
+
+Provides a `.destroy()` action that implements deletion of an existing model instance.
+
+#### destroy()
+
+**Signature:** `destroy(request, *args, **kwargs)`
+
+If an object is deleted, returns a `204 No Content` response. Otherwise, returns a `404 Not Found`.
+
+<ParamField path="request" type="Request" required>
+  The request instance.
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments.
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments.
+</ParamField>
+
+**Returns:** `Response`
+
+#### perform_destroy()
+
+**Signature:** `perform_destroy(instance)`
+
+Called by `destroy()` when deleting an object instance. Override to customize deletion behavior.
+
+<ParamField path="instance" type="Model" required>
+  The model instance to delete.
+</ParamField>
+
+```python
+def perform_destroy(self, instance):
+    # Soft delete instead of actual deletion
+    instance.is_deleted = True
+    instance.save()
+```
+
+---
+
+## Concrete View Classes
+
+The following classes are the concrete generic views. Import from: `rest_framework.generics`
+
+### CreateAPIView
+
+**Signature:** `class CreateAPIView(CreateModelMixin, GenericAPIView)`
+
+Used for create-only endpoints.
+
+**Provides:** `post` method handler
+
+**Extends:** [GenericAPIView](#genericapiview), [CreateModelMixin](#createmodelmixin)
+
+```python
+from rest_framework import generics
+
+class UserCreate(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+```
+
+### ListAPIView
+
+**Signature:** `class ListAPIView(ListModelMixin, GenericAPIView)`
+
+Used for read-only endpoints to represent a collection of model instances.
+
+**Provides:** `get` method handler
+
+**Extends:** [GenericAPIView](#genericapiview), [ListModelMixin](#listmodelmixin)
+
+### RetrieveAPIView
+
+**Signature:** `class RetrieveAPIView(RetrieveModelMixin, GenericAPIView)`
+
+Used for read-only endpoints to represent a single model instance.
+
+**Provides:** `get` method handler
+
+**Extends:** [GenericAPIView](#genericapiview), [RetrieveModelMixin](#retrievemodelmixin)
+
+### DestroyAPIView
+
+**Signature:** `class DestroyAPIView(DestroyModelMixin, GenericAPIView)`
+
+Used for delete-only endpoints for a single model instance.
+
+**Provides:** `delete` method handler
+
+**Extends:** [GenericAPIView](#genericapiview), [DestroyModelMixin](#destroymodelmixin)
+
+### UpdateAPIView
+
+**Signature:** `class UpdateAPIView(UpdateModelMixin, GenericAPIView)`
+
+Used for update-only endpoints for a single model instance.
+
+**Provides:** `put` and `patch` method handlers
+
+**Extends:** [GenericAPIView](#genericapiview), [UpdateModelMixin](#updatemodelmixin)
+
+### ListCreateAPIView
+
+**Signature:** `class ListCreateAPIView(ListModelMixin, CreateModelMixin, GenericAPIView)`
+
+Used for read-write endpoints to represent a collection of model instances.
+
+**Provides:** `get` and `post` method handlers
+
+**Extends:** [GenericAPIView](#genericapiview), [ListModelMixin](#listmodelmixin), [CreateModelMixin](#createmodelmixin)
+
+```python
+class UserListCreate(generics.ListCreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAdminUser]
+```
+
+### RetrieveUpdateAPIView
+
+**Signature:** `class RetrieveUpdateAPIView(RetrieveModelMixin, UpdateModelMixin, GenericAPIView)`
+
+Used for read or update endpoints to represent a single model instance.
+
+**Provides:** `get`, `put`, and `patch` method handlers
+
+**Extends:** [GenericAPIView](#genericapiview), [RetrieveModelMixin](#retrievemodelmixin), [UpdateModelMixin](#updatemodelmixin)
+
+### RetrieveDestroyAPIView
+
+**Signature:** `class RetrieveDestroyAPIView(RetrieveModelMixin, DestroyModelMixin, GenericAPIView)`
+
+Used for read or delete endpoints to represent a single model instance.
+
+**Provides:** `get` and `delete` method handlers
+
+**Extends:** [GenericAPIView](#genericapiview), [RetrieveModelMixin](#retrievemodelmixin), [DestroyModelMixin](#destroymodelmixin)
+
+### RetrieveUpdateDestroyAPIView
+
+**Signature:** `class RetrieveUpdateDestroyAPIView(RetrieveModelMixin, UpdateModelMixin, DestroyModelMixin, GenericAPIView)`
+
+Used for read-write-delete endpoints to represent a single model instance.
+
+**Provides:** `get`, `put`, `patch`, and `delete` method handlers
+
+**Extends:** [GenericAPIView](#genericapiview), [RetrieveModelMixin](#retrievemodelmixin), [UpdateModelMixin](#updatemodelmixin), [DestroyModelMixin](#destroymodelmixin)
+
+```python
+class UserDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+```
+
+---
+
+## Utility Functions
+
+### get_object_or_404()
+
+**Signature:** `get_object_or_404(queryset, *filter_args, **filter_kwargs)`
+
+Same as Django's standard shortcut, but also raises 404 if the filter_kwargs don't match the required types.
+
+<ParamField path="queryset" type="QuerySet" required>
+  The queryset to filter.
+</ParamField>
+
+<ParamField path="filter_args" type="tuple">
+  Positional filter arguments.
+</ParamField>
+
+<ParamField path="filter_kwargs" type="dict">
+  Named filter arguments.
+</ParamField>
+
+**Returns:** `Model`
+
+**Raises:** `Http404`
+
+```python
+from rest_framework.generics import get_object_or_404
+
+obj = get_object_or_404(MyModel.objects.all(), pk=pk)
+```

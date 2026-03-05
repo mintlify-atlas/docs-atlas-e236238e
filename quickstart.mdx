@@ -1,80 +1,361 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Build your first Django REST Framework API in minutes
+icon: "rocket"
 ---
 
-## Get started in three steps
+This quickstart guide will walk you through building a simple API that allows admin users to view and edit users and groups in the system.
 
-Get your documentation site running locally and make your first customization.
+## Project Setup
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Steps>
+  <Step title="Create project directory">
+    First, create a new directory for your project and set up a virtual environment:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    <CodeGroup>
+    ```bash Linux/macOS
+    # Create the project directory
+    mkdir tutorial
+    cd tutorial
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    # Create a virtual environment
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash Windows
+    # Create the project directory
+    mkdir tutorial
+    cd tutorial
+    
+    # Create a virtual environment
+    python3 -m venv .venv
+    .venv\Scripts\activate
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Install dependencies">
+    Install Django and Django REST Framework:
+    
+    ```bash
+    pip install djangorestframework
+    ```
+    
+    <Note>
+    Installing `djangorestframework` automatically installs Django as a dependency.
+    </Note>
+  </Step>
+  
+  <Step title="Create Django project">
+    Set up a new Django project with a single application:
+    
+    ```bash
+    # Create project (note the trailing '.' character)
+    django-admin startproject tutorial .
+    
+    # Create app inside the project directory
+    cd tutorial
+    django-admin startapp quickstart
+    cd ..
+    ```
+  </Step>
+  
+  <Step title="Initialize database">
+    Sync your database and create an admin user:
+    
+    ```bash
+    python manage.py migrate
+    python manage.py createsuperuser --username admin --email admin@example.com
+    ```
+    
+    You'll be prompted to enter a password for the admin user.
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Build the API
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Now let's create a simple API for managing users and groups.
 
-### Step 3: Go live
+### Configure Settings
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+Add `'rest_framework'` to `INSTALLED_APPS` in `tutorial/settings.py`:
 
-## Next steps
+```python tutorial/settings.py
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "rest_framework",
+]
 
-Now that you have your docs running, explore these key features:
+# Optional: Configure pagination
+REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 10,
+}
+```
 
-<CardGroup cols={2}>
+### Create Serializers
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+Create a new file `tutorial/quickstart/serializers.py`:
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+```python tutorial/quickstart/serializers.py
+from django.contrib.auth.models import Group, User
+from rest_framework import serializers
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = User
+        fields = ["url", "username", "email", "groups"]
 
-</CardGroup>
+
+class GroupSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Group
+        fields = ["url", "name"]
+```
+
+<Tip>
+We're using `HyperlinkedModelSerializer` which uses hyperlinks to represent relationships between resources. This is good RESTful design.
+</Tip>
+
+### Create ViewSets
+
+Open `tutorial/quickstart/views.py` and add the following:
+
+```python tutorial/quickstart/views.py
+from django.contrib.auth.models import Group, User
+from rest_framework import permissions, viewsets
+
+from tutorial.quickstart.serializers import GroupSerializer, UserSerializer
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows users to be viewed or edited.
+    """
+    queryset = User.objects.all().order_by("-date_joined")
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class GroupViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows groups to be viewed or edited.
+    """
+    queryset = Group.objects.all().order_by("name")
+    serializer_class = GroupSerializer
+    permission_classes = [permissions.IsAuthenticated]
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+Instead of writing multiple views, we're grouping common behavior into `ViewSets`. This keeps the code organized and concise.
 </Note>
+
+### Configure URLs
+
+Update `tutorial/urls.py` to wire up the API URLs:
+
+```python tutorial/urls.py
+from django.urls import include, path
+from rest_framework import routers
+
+from tutorial.quickstart import views
+
+router = routers.DefaultRouter()
+router.register(r"users", views.UserViewSet)
+router.register(r"groups", views.GroupViewSet)
+
+# Wire up our API using automatic URL routing.
+# Additionally, we include login URLs for the browsable API.
+urlpatterns = [
+    path("", include(router.urls)),
+    path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
+]
+```
+
+<Tip>
+By using viewsets with a router, we can automatically generate the URL configuration for our API.
+</Tip>
+
+## Test Your API
+
+<Steps>
+  <Step title="Start the development server">
+    ```bash
+    python manage.py runserver
+    ```
+  </Step>
+  
+  <Step title="Access the browsable API">
+    Open your browser and navigate to:
+    
+    ```
+    http://127.0.0.1:8000/
+    ```
+    
+    You'll see the browsable API interface showing your users and groups endpoints.
+    
+    <Note>
+    Use the **Login** control in the top right corner to authenticate with the admin credentials you created earlier.
+    </Note>
+  </Step>
+  
+  <Step title="Test with command-line tools">
+    You can also interact with the API using command-line tools like `curl`:
+    
+    <CodeGroup>
+    ```bash curl
+    # List all users
+    curl -u admin -H 'Accept: application/json; indent=4' http://127.0.0.1:8000/users/
+    
+    # Response:
+    # {
+    #     "count": 1,
+    #     "next": null,
+    #     "previous": null,
+    #     "results": [
+    #         {
+    #             "url": "http://127.0.0.1:8000/users/1/",
+    #             "username": "admin",
+    #             "email": "admin@example.com",
+    #             "groups": []
+    #         }
+    #     ]
+    # }
+    ```
+    
+    ```bash httpie
+    # Install httpie first: pip install httpie
+    http -a admin http://127.0.0.1:8000/users/
+    
+    # Response:
+    # HTTP/1.1 200 OK
+    # {
+    #     "count": 1,
+    #     "next": null,
+    #     "previous": null,
+    #     "results": [
+    #         {
+    #             "email": "admin@example.com",
+    #             "groups": [],
+    #             "url": "http://127.0.0.1:8000/users/1/",
+    #             "username": "admin"
+    #         }
+    #     ]
+    # }
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+## What You've Built
+
+Congratulations! You've created a fully functional REST API with:
+
+<CardGroup cols={2}>
+  <Card title="Browsable API" icon="browser" color="#a40404">
+    An interactive, web-browsable interface for your API
+  </Card>
+  <Card title="Authentication" icon="lock" color="#a40404">
+    Login and permission controls
+  </Card>
+  <Card title="Serialization" icon="code" color="#a40404">
+    Automatic JSON serialization of Django models
+  </Card>
+  <Card title="CRUD Operations" icon="database" color="#a40404">
+    Create, Read, Update, and Delete functionality
+  </Card>
+</CardGroup>
+
+## Understanding the Code
+
+### Serializers
+
+Serializers convert complex data types (like Django models) into Python data types that can be easily rendered into JSON:
+
+```python
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = User
+        fields = ["url", "username", "email", "groups"]
+```
+
+### ViewSets
+
+ViewSets combine the logic for multiple related views into a single class:
+
+```python
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all().order_by("-date_joined")
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+```
+
+`ModelViewSet` provides default implementations for:
+- `.list()` - List all users
+- `.create()` - Create a new user
+- `.retrieve()` - Get a specific user
+- `.update()` - Update a user
+- `.partial_update()` - Partially update a user
+- `.destroy()` - Delete a user
+
+### Routers
+
+Routers automatically generate URL patterns for your viewsets:
+
+```python
+router = routers.DefaultRouter()
+router.register(r"users", views.UserViewSet)
+router.register(r"groups", views.GroupViewSet)
+```
+
+This creates the following URL patterns:
+- `GET /users/` - List users
+- `POST /users/` - Create user
+- `GET /users/{id}/` - Retrieve user
+- `PUT /users/{id}/` - Update user
+- `PATCH /users/{id}/` - Partial update
+- `DELETE /users/{id}/` - Delete user
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card 
+    title="Tutorial" 
+    icon="graduation-cap" 
+    href="/tutorial/1-serialization"
+    color="#a40404"
+  >
+    Learn REST framework in depth with our step-by-step tutorial
+  </Card>
+  <Card 
+    title="API Guide" 
+    icon="book-open" 
+    href="/api/requests"
+    color="#a40404"
+  >
+    Explore the complete API reference
+  </Card>
+  <Card 
+    title="Serializers" 
+    icon="code" 
+    href="/api/serializers"
+    color="#a40404"
+  >
+    Deep dive into serialization
+  </Card>
+  <Card 
+    title="ViewSets & Routers" 
+    icon="route" 
+    href="/api/viewsets"
+    color="#a40404"
+  >
+    Master advanced view patterns
+  </Card>
+</CardGroup>

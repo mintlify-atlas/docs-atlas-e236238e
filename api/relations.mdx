@@ -1,0 +1,549 @@
+---
+title: Relational Fields
+description: API reference for Django REST Framework relational field types
+---
+
+Relational fields are used to represent model relationships. They can be applied to `ForeignKey`, `ManyToManyField` and `OneToOneField` relationships, as well as reverse relationships and custom relationships.
+
+## Common Arguments
+
+All relational fields accept the following arguments:
+
+<ParamField path="queryset" type="QuerySet">
+  Queryset for model instance lookups. Required for writable fields.
+</ParamField>
+
+<ParamField path="many" type="bool" default="False">
+  Apply to a to-many relationship.
+</ParamField>
+
+<ParamField path="allow_null" type="bool" default="False">
+  Accept `None` for nullable relationships.
+</ParamField>
+
+<ParamField path="read_only" type="bool" default="False">
+  Field is used for serialization only.
+</ParamField>
+
+<ParamField path="write_only" type="bool" default="False">
+  Field is used for deserialization only.
+</ParamField>
+
+<ParamField path="required" type="bool" default="True">
+  Field must be present in input data.
+</ParamField>
+
+---
+
+## StringRelatedField
+
+Represents the target using its `__str__` method.
+
+### Class Signature
+
+```python
+StringRelatedField(many=False)
+```
+
+**Properties:**
+- Read-only
+- Returns string representation of related object
+
+### Example
+
+```python
+class AlbumSerializer(serializers.ModelSerializer):
+    tracks = serializers.StringRelatedField(many=True)
+
+    class Meta:
+        model = Album
+        fields = ['album_name', 'artist', 'tracks']
+```
+
+**Output:**
+```json
+{
+    "album_name": "Things We Lost In The Fire",
+    "artist": "Low",
+    "tracks": [
+        "1: Sunflower",
+        "2: Whitetail",
+        "3: Dinosaur Act"
+    ]
+}
+```
+
+---
+
+## PrimaryKeyRelatedField
+
+Represents the target using its primary key.
+
+### Class Signature
+
+```python
+PrimaryKeyRelatedField(
+    queryset=None,
+    many=False,
+    allow_null=False,
+    pk_field=None
+)
+```
+
+<ParamField path="queryset" type="QuerySet">
+  Queryset for model instance lookups. Required unless `read_only=True`.
+</ParamField>
+
+<ParamField path="many" type="bool" default="False">
+  Apply to a to-many relationship.
+</ParamField>
+
+<ParamField path="allow_null" type="bool" default="False">
+  Accept `None` for nullable relationships.
+</ParamField>
+
+<ParamField path="pk_field" type="Field">
+  Field instance to control serialization/deserialization of primary key value.
+</ParamField>
+
+**Properties:**
+- Read-write by default
+- Returns primary key value
+
+### Example
+
+```python
+class AlbumSerializer(serializers.ModelSerializer):
+    tracks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+
+    class Meta:
+        model = Album
+        fields = ['album_name', 'artist', 'tracks']
+```
+
+**Output:**
+```json
+{
+    "album_name": "Undun",
+    "artist": "The Roots",
+    "tracks": [89, 90, 91]
+}
+```
+
+### Custom Primary Key
+
+```python
+owner = serializers.PrimaryKeyRelatedField(
+    queryset=User.objects.all(),
+    pk_field=serializers.UUIDField(format='hex')
+)
+```
+
+---
+
+## HyperlinkedRelatedField
+
+Represents the target using a hyperlink.
+
+### Class Signature
+
+```python
+HyperlinkedRelatedField(
+    view_name,
+    queryset=None,
+    many=False,
+    allow_null=False,
+    lookup_field='pk',
+    lookup_url_kwarg=None,
+    format=None
+)
+```
+
+<ParamField path="view_name" type="str" required>
+  View name for URL reversal. Format: `<modelname>-detail`.
+</ParamField>
+
+<ParamField path="queryset" type="QuerySet">
+  Queryset for model instance lookups. Required unless `read_only=True`.
+</ParamField>
+
+<ParamField path="many" type="bool" default="False">
+  Apply to a to-many relationship.
+</ParamField>
+
+<ParamField path="allow_null" type="bool" default="False">
+  Accept `None` for nullable relationships.
+</ParamField>
+
+<ParamField path="lookup_field" type="str" default="'pk'">
+  Field on target for lookup.
+</ParamField>
+
+<ParamField path="lookup_url_kwarg" type="str">
+  URL keyword argument name. Defaults to `lookup_field`.
+</ParamField>
+
+<ParamField path="format" type="str">
+  Format suffix for hyperlinks.
+</ParamField>
+
+**Properties:**
+- Read-write by default
+- Requires `request` in serializer context
+- Returns absolute URL
+
+### Example
+
+```python
+class AlbumSerializer(serializers.ModelSerializer):
+    tracks = serializers.HyperlinkedRelatedField(
+        many=True,
+        read_only=True,
+        view_name='track-detail'
+    )
+
+    class Meta:
+        model = Album
+        fields = ['album_name', 'artist', 'tracks']
+```
+
+**Output:**
+```json
+{
+    "album_name": "Graceland",
+    "artist": "Paul Simon",
+    "tracks": [
+        "http://www.example.com/api/tracks/45/",
+        "http://www.example.com/api/tracks/46/"
+    ]
+}
+```
+
+### Custom Hyperlink
+
+```python
+class CustomerHyperlink(serializers.HyperlinkedRelatedField):
+    view_name = 'customer-detail'
+    queryset = Customer.objects.all()
+
+    def get_url(self, obj, view_name, request, format):
+        url_kwargs = {
+            'organization_slug': obj.organization.slug,
+            'customer_pk': obj.pk
+        }
+        return reverse(view_name, kwargs=url_kwargs, request=request, format=format)
+
+    def get_object(self, view_name, view_args, view_kwargs):
+        lookup_kwargs = {
+           'organization__slug': view_kwargs['organization_slug'],
+           'pk': view_kwargs['customer_pk']
+        }
+        return self.get_queryset().get(**lookup_kwargs)
+```
+
+---
+
+## SlugRelatedField
+
+Represents the target using a field on the target.
+
+### Class Signature
+
+```python
+SlugRelatedField(
+    slug_field,
+    queryset=None,
+    many=False,
+    allow_null=False
+)
+```
+
+<ParamField path="slug_field" type="str" required>
+  Field on target to represent it. Should be unique.
+</ParamField>
+
+<ParamField path="queryset" type="QuerySet">
+  Queryset for model instance lookups. Required unless `read_only=True`.
+</ParamField>
+
+<ParamField path="many" type="bool" default="False">
+  Apply to a to-many relationship.
+</ParamField>
+
+<ParamField path="allow_null" type="bool" default="False">
+  Accept `None` for nullable relationships.
+</ParamField>
+
+**Properties:**
+- Read-write by default
+- Returns value of specified field
+
+### Example
+
+```python
+class AlbumSerializer(serializers.ModelSerializer):
+    tracks = serializers.SlugRelatedField(
+        many=True,
+        read_only=True,
+        slug_field='title'
+    )
+
+    class Meta:
+        model = Album
+        fields = ['album_name', 'artist', 'tracks']
+```
+
+**Output:**
+```json
+{
+    "album_name": "Dear John",
+    "artist": "Loney Dear",
+    "tracks": [
+        "Airport Surroundings",
+        "Everything Turns to You",
+        "I Was Only Going Out"
+    ]
+}
+```
+
+### Nested Relationship
+
+```python
+author_email = serializers.SlugRelatedField(
+    slug_field='author__email',
+    queryset=Book.objects.all()
+)
+```
+
+---
+
+## HyperlinkedIdentityField
+
+Represents the identity URL for an object.
+
+### Class Signature
+
+```python
+HyperlinkedIdentityField(
+    view_name,
+    lookup_field='pk',
+    lookup_url_kwarg=None,
+    format=None
+)
+```
+
+<ParamField path="view_name" type="str" required>
+  View name for URL reversal.
+</ParamField>
+
+<ParamField path="lookup_field" type="str" default="'pk'">
+  Field on target for lookup.
+</ParamField>
+
+<ParamField path="lookup_url_kwarg" type="str">
+  URL keyword argument name. Defaults to `lookup_field`.
+</ParamField>
+
+<ParamField path="format" type="str">
+  Format suffix for hyperlinks.
+</ParamField>
+
+**Properties:**
+- Always read-only
+- Uses `source='*'` to pass entire object
+- Requires `request` in serializer context
+
+### Example
+
+```python
+class AlbumSerializer(serializers.HyperlinkedModelSerializer):
+    track_listing = serializers.HyperlinkedIdentityField(view_name='track-list')
+
+    class Meta:
+        model = Album
+        fields = ['album_name', 'artist', 'track_listing']
+```
+
+**Output:**
+```json
+{
+    "album_name": "The Eraser",
+    "artist": "Thom Yorke",
+    "track_listing": "http://www.example.com/api/track_list/12/"
+}
+```
+
+---
+
+## ManyRelatedField
+
+Wrapper field for to-many relationships.
+
+### Class Signature
+
+```python
+ManyRelatedField(
+    child_relation=None,
+    allow_empty=True,
+    html_cutoff=None,
+    html_cutoff_text=None
+)
+```
+
+<ParamField path="child_relation" type="RelatedField" required>
+  The relational field instance for individual items.
+</ParamField>
+
+<ParamField path="allow_empty" type="bool" default="True">
+  Allow empty lists.
+</ParamField>
+
+<ParamField path="html_cutoff" type="int">
+  Maximum choices displayed in HTML select.
+</ParamField>
+
+<ParamField path="html_cutoff_text" type="str">
+  Text indicator for cutoff choices.
+</ParamField>
+
+**Note:** Usually created automatically when `many=True` is set on a relational field.
+
+---
+
+## Nested Relationships
+
+Use serializers as fields to create nested representations.
+
+### Example
+
+```python
+class TrackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Track
+        fields = ['order', 'title', 'duration']
+
+class AlbumSerializer(serializers.ModelSerializer):
+    tracks = TrackSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Album
+        fields = ['album_name', 'artist', 'tracks']
+```
+
+**Output:**
+```json
+{
+    "album_name": "The Gray Album",
+    "artist": "Danger Mouse",
+    "tracks": [
+        {"order": 1, "title": "Public Service Announcement", "duration": 245},
+        {"order": 2, "title": "What More Can I Say", "duration": 264}
+    ]
+}
+```
+
+### Writable Nested Serializer
+
+```python
+class AlbumSerializer(serializers.ModelSerializer):
+    tracks = TrackSerializer(many=True)
+
+    class Meta:
+        model = Album
+        fields = ['album_name', 'artist', 'tracks']
+
+    def create(self, validated_data):
+        tracks_data = validated_data.pop('tracks')
+        album = Album.objects.create(**validated_data)
+        for track_data in tracks_data:
+            Track.objects.create(album=album, **track_data)
+        return album
+```
+
+---
+
+## Custom Relational Fields
+
+Create custom relational fields by subclassing `RelatedField`.
+
+### Example
+
+```python
+import time
+
+class TrackListingField(serializers.RelatedField):
+    def to_representation(self, value):
+        duration = time.strftime('%M:%S', time.gmtime(value.duration))
+        return 'Track %d: %s (%s)' % (value.order, value.title, duration)
+
+class AlbumSerializer(serializers.ModelSerializer):
+    tracks = TrackListingField(many=True, read_only=True)
+
+    class Meta:
+        model = Album
+        fields = ['album_name', 'artist', 'tracks']
+```
+
+**Output:**
+```json
+{
+    "album_name": "Sometimes I Wish We Were an Eagle",
+    "artist": "Bill Callahan",
+    "tracks": [
+        "Track 1: Jim Cain (04:39)",
+        "Track 2: Eid Ma Clack Shaw (04:19)"
+    ]
+}
+```
+
+### Writable Custom Field
+
+```python
+class TrackListingField(serializers.RelatedField):
+    def to_representation(self, value):
+        return value.title
+
+    def to_internal_value(self, data):
+        try:
+            return Track.objects.get(title=data)
+        except Track.DoesNotExist:
+            raise serializers.ValidationError(
+                f'Track with title "{data}" does not exist.'
+            )
+
+    def get_queryset(self):
+        return Track.objects.all()
+```
+
+---
+
+## Display Customization
+
+### Custom String Representation
+
+```python
+class TrackPrimaryKeyRelatedField(serializers.PrimaryKeyRelatedField):
+    def display_value(self, instance):
+        return 'Track: %s' % (instance.title)
+```
+
+### HTML Select Cutoff
+
+```python
+assigned_to = serializers.SlugRelatedField(
+    queryset=User.objects.all(),
+    slug_field='username',
+    html_cutoff=100,
+    html_cutoff_text='More than {count} users...'
+)
+```
+
+Or disable HTML select:
+
+```python
+assigned_to = serializers.SlugRelatedField(
+    queryset=User.objects.all(),
+    slug_field='username',
+    style={'base_template': 'input.html'}
+)
+```

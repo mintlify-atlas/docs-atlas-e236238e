@@ -1,0 +1,758 @@
+---
+title: "Views and ViewSets"
+description: "Understanding views, generic views, and viewsets in Django REST Framework"
+---
+
+## The View Hierarchy
+
+DRF provides multiple levels of abstraction for building API views:
+
+```mermaid
+graph TD
+    A[Function-Based Views] --> B[@api_view decorator]
+    C[django.views.generic.View] --> D[APIView]
+    D --> E[GenericAPIView]
+    E --> F[Mixins + GenericAPIView]
+    F --> G[Concrete Generic Views]
+    E --> H[GenericViewSet]
+    H --> I[ModelViewSet]
+    H --> J[ReadOnlyModelViewSet]
+```
+
+Each level adds more features and automation, but reduces flexibility.
+
+## APIView: The Foundation
+
+APIView is the base class for all class-based views in DRF:
+
+```python
+# From rest_framework/views.py:105
+class APIView(View):
+    # The following policies may be set at either globally, or per-view.
+    renderer_classes = api_settings.DEFAULT_RENDERER_CLASSES
+    parser_classes = api_settings.DEFAULT_PARSER_CLASSES
+    authentication_classes = api_settings.DEFAULT_AUTHENTICATION_CLASSES
+    throttle_classes = api_settings.DEFAULT_THROTTLE_CLASSES
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES
+    content_negotiation_class = api_settings.DEFAULT_CONTENT_NEGOTIATION_CLASS
+```
+
+### What APIView Provides
+
+1. **Request/Response wrappers**: Converts Django's HttpRequest to DRF's Request
+2. **Authentication**: Runs authentication before calling your handler
+3. **Permissions**: Checks permissions before allowing access
+4. **Throttling**: Rate-limits requests
+5. **Content negotiation**: Selects appropriate renderer
+6. **Exception handling**: Catches and formats exceptions
+
+### Basic APIView Example
+
+```python
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+class ArticleListView(APIView):
+    """
+    List all articles or create a new article.
+    """
+    def get(self, request):
+        articles = Article.objects.all()
+        serializer = ArticleSerializer(articles, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        serializer = ArticleSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+```
+
+### The dispatch() Method
+
+The magic happens in `dispatch()`:
+
+```python
+# From rest_framework/views.py:491-518
+def dispatch(self, request, *args, **kwargs):
+    """
+    `.dispatch()` is pretty much the same as Django's regular dispatch,
+    but with extra hooks for startup, finalize, and exception handling.
+    """
+    self.args = args
+    self.kwargs = kwargs
+    
+    # Wrap the request
+    request = self.initialize_request(request, *args, **kwargs)
+    self.request = request
+    self.headers = self.default_response_headers
+    
+    try:
+        # Run authentication, permissions, throttling
+        self.initial(request, *args, **kwargs)
+        
+        # Get the appropriate handler method
+        if request.method.lower() in self.http_method_names:
+            handler = getattr(self, request.method.lower(),
+                              self.http_method_not_allowed)
+        else:
+            handler = self.http_method_not_allowed
+        
+        response = handler(request, *args, **kwargs)
+    
+    except Exception as exc:
+        response = self.handle_exception(exc)
+    
+    self.response = self.finalize_response(request, response, *args, **kwargs)
+    return self.response
+```
+
+<Info>
+  Notice how `dispatch()` wraps the entire request-response cycle with initialization, exception handling, and finalization hooks.
+</Info>
+
+## Generic Views
+
+Generic views implement common patterns. They're built from mixins and GenericAPIView.
+
+### GenericAPIView
+
+Provides core functionality for model-backed views:
+
+```python
+class GenericAPIView(APIView):
+    # Query attributes
+    queryset = None
+    serializer_class = None
+    
+    # Pagination
+    pagination_class = api_settings.DEFAULT_PAGINATION_CLASS
+    
+    # Filtering
+    filter_backends = api_settings.DEFAULT_FILTER_BACKENDS
+    
+    # Lookup
+    lookup_field = 'pk'
+    lookup_url_kwarg = None
+```
+
+### Key Methods
+
+#### get_queryset()
+
+```python
+def get_queryset(self):
+    """
+    Get the list of items for this view.
+    Override to filter by user, add select_related, etc.
+    """
+    assert self.queryset is not None, (
+        "'%s' should either include a `queryset` attribute, "
+        "or override the `get_queryset()` method."
+        % self.__class__.__name__
+    )
+    queryset = self.queryset
+    if isinstance(queryset, QuerySet):
+        queryset = queryset.all()  # Ensure queryset is re-evaluated
+    return queryset
+```
+
+<Tip>
+  Always override `get_queryset()` rather than directly accessing `self.queryset` to ensure you get a fresh queryset on each request.
+</Tip>
+
+#### get_object()
+
+```python
+def get_object(self):
+    """
+    Returns the object the view is displaying.
+    
+    - Performs the lookup filtering
+    - Checks object-level permissions
+    - Raises Http404 if not found
+    """
+    queryset = self.filter_queryset(self.get_queryset())
+    
+    # Perform the lookup
+    lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+    filter_kwargs = {self.lookup_field: self.kwargs[lookup_url_kwarg]}
+    obj = get_object_or_404(queryset, **filter_kwargs)
+    
+    # Check object permissions
+    self.check_object_permissions(self.request, obj)
+    
+    return obj
+```
+
+#### get_serializer()
+
+```python
+def get_serializer(self, *args, **kwargs):
+    """
+    Return the serializer instance that should be used for validating and
+    deserializing input, and for serializing output.
+    """
+    serializer_class = self.get_serializer_class()
+    kwargs.setdefault('context', self.get_serializer_context())
+    return serializer_class(*args, **kwargs)
+
+def get_serializer_context(self):
+    """
+    Extra context provided to the serializer class.
+    """
+    return {
+        'request': self.request,
+        'format': self.format_kwarg,
+        'view': self
+    }
+```
+
+### Mixins
+
+Mixins provide specific CRUD operations:
+
+#### ListModelMixin
+
+```python
+class ListModelMixin:
+    """
+    List a queryset.
+    """
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+```
+
+#### CreateModelMixin
+
+```python
+class CreateModelMixin:
+    """
+    Create a model instance.
+    """
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
+    def perform_create(self, serializer):
+        serializer.save()
+```
+
+<Note>
+  Notice the `perform_create()` hook. Override this to add behavior without rewriting the entire `create()` method.
+</Note>
+
+#### RetrieveModelMixin
+
+```python
+class RetrieveModelMixin:
+    """
+    Retrieve a model instance.
+    """
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+```
+
+#### UpdateModelMixin
+
+```python
+class UpdateModelMixin:
+    """
+    Update a model instance.
+    """
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+    
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+    
+    def perform_update(self, serializer):
+        serializer.save()
+```
+
+#### DestroyModelMixin
+
+```python
+class DestroyModelMixin:
+    """
+    Destroy a model instance.
+    """
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    def perform_destroy(self, instance):
+        instance.delete()
+```
+
+### Concrete Generic Views
+
+Concrete views combine mixins with GenericAPIView:
+
+```python
+from rest_framework import generics
+
+# List and create
+class ArticleList(generics.ListCreateAPIView):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+
+# Retrieve, update, and delete
+class ArticleDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+```
+
+### Available Concrete Views
+
+| Class | Mixins | Methods |
+|-------|--------|----------|
+| `CreateAPIView` | CreateModelMixin | POST |
+| `ListAPIView` | ListModelMixin | GET |
+| `RetrieveAPIView` | RetrieveModelMixin | GET |
+| `DestroyAPIView` | DestroyModelMixin | DELETE |
+| `UpdateAPIView` | UpdateModelMixin | PUT, PATCH |
+| `ListCreateAPIView` | List + Create | GET, POST |
+| `RetrieveUpdateAPIView` | Retrieve + Update | GET, PUT, PATCH |
+| `RetrieveDestroyAPIView` | Retrieve + Destroy | GET, DELETE |
+| `RetrieveUpdateDestroyAPIView` | Retrieve + Update + Destroy | GET, PUT, PATCH, DELETE |
+
+## ViewSets: Actions Instead of Methods
+
+ViewSets are the highest level of abstraction. Instead of HTTP method handlers, they define **actions**.
+
+### Why Actions?
+
+Traditional views map URLs to HTTP methods:
+```
+GET /articles/      → ArticleListView.get()
+POST /articles/     → ArticleListView.post()
+GET /articles/1/    → ArticleDetailView.get()
+```
+
+ViewSets map URLs to resource actions:
+```
+GET /articles/      → ArticleViewSet.list()
+POST /articles/     → ArticleViewSet.create()
+GET /articles/1/    → ArticleViewSet.retrieve()
+```
+
+### ViewSetMixin: The Core
+
+```python
+# From rest_framework/viewsets.py:45-56
+class ViewSetMixin:
+    """
+    Overrides `.as_view()` so that it takes an `actions` keyword that performs
+    the binding of HTTP methods to actions on the Resource.
+    
+    For example, to create a concrete view binding the 'GET' and 'POST' methods
+    to the 'list' and 'create' actions...
+    
+    view = MyViewSet.as_view({'get': 'list', 'post': 'create'})
+    """
+```
+
+### How as_view() Works with ViewSets
+
+```python
+# From rest_framework/viewsets.py:58-146 (simplified)
+@classonlymethod
+def as_view(cls, actions=None, **initkwargs):
+    # actions must not be empty
+    if not actions:
+        raise TypeError("The `actions` argument must be provided")
+    
+    def view(request, *args, **kwargs):
+        self = cls(**initkwargs)
+        
+        # Store the action mapping
+        self.action_map = actions
+        
+        # Bind methods to actions
+        for method, action in actions.items():
+            handler = getattr(self, action)
+            setattr(self, method, handler)  # Magic happens here!
+        
+        return self.dispatch(request, *args, **kwargs)
+    
+    return view
+```
+
+<Info>
+  ViewSets dynamically bind actions to HTTP methods at view instantiation time. This allows one ViewSet class to serve multiple URL patterns.
+</Info>
+
+### ViewSet Types
+
+#### ViewSet (Base)
+
+```python
+class ViewSet(ViewSetMixin, views.APIView):
+    """
+    The base ViewSet class does not provide any actions by default.
+    """
+    pass
+```
+
+Use when you want complete control:
+
+```python
+class ArticleViewSet(ViewSet):
+    def list(self, request):
+        articles = Article.objects.all()
+        serializer = ArticleSerializer(articles, many=True)
+        return Response(serializer.data)
+    
+    def create(self, request):
+        serializer = ArticleSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+```
+
+#### GenericViewSet
+
+```python
+class GenericViewSet(ViewSetMixin, generics.GenericAPIView):
+    """
+    Includes the base set of generic view behavior, such as
+    `get_object` and `get_queryset` methods.
+    """
+    pass
+```
+
+Combine with mixins:
+
+```python
+class ArticleViewSet(mixins.ListModelMixin,
+                     mixins.CreateModelMixin,
+                     GenericViewSet):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+```
+
+#### ModelViewSet
+
+```python
+# From rest_framework/viewsets.py:245-255
+class ModelViewSet(mixins.CreateModelMixin,
+                   mixins.RetrieveModelMixin,
+                   mixins.UpdateModelMixin,
+                   mixins.DestroyModelMixin,
+                   mixins.ListModelMixin,
+                   GenericViewSet):
+    """
+    A viewset that provides default `create()`, `retrieve()`, `update()`,
+    `partial_update()`, `destroy()` and `list()` actions.
+    """
+    pass
+```
+
+The most common ViewSet:
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+```
+
+This automatically provides:
+- `list()` - GET /articles/
+- `create()` - POST /articles/
+- `retrieve()` - GET /articles/{pk}/
+- `update()` - PUT /articles/{pk}/
+- `partial_update()` - PATCH /articles/{pk}/
+- `destroy()` - DELETE /articles/{pk}/
+
+#### ReadOnlyModelViewSet
+
+```python
+# From rest_framework/viewsets.py:236-242
+class ReadOnlyModelViewSet(mixins.RetrieveModelMixin,
+                           mixins.ListModelMixin,
+                           GenericViewSet):
+    """
+    A viewset that provides default `list()` and `retrieve()` actions.
+    """
+    pass
+```
+
+For read-only APIs:
+
+```python
+class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+```
+
+## Custom Actions with @action
+
+Add custom endpoints to your ViewSet:
+
+```python
+from rest_framework.decorators import action
+
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+    
+    @action(detail=True, methods=['post'])
+    def publish(self, request, pk=None):
+        """Publish an article"""
+        article = self.get_object()
+        article.published = True
+        article.published_date = timezone.now()
+        article.save()
+        return Response({'status': 'article published'})
+    
+    @action(detail=False, methods=['get'])
+    def recent(self, request):
+        """Get recent articles"""
+        recent_articles = self.get_queryset().order_by('-created')[:10]
+        serializer = self.get_serializer(recent_articles, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAdminUser])
+    def stats(self, request, pk=None):
+        """Get article statistics (admin only)"""
+        article = self.get_object()
+        return Response({
+            'views': article.view_count,
+            'comments': article.comments.count(),
+            'likes': article.likes.count()
+        })
+```
+
+### URL Routing for Actions
+
+```python
+# detail=True: /articles/{pk}/publish/
+@action(detail=True, methods=['post'])
+def publish(self, request, pk=None):
+    pass
+
+# detail=False: /articles/recent/
+@action(detail=False, methods=['get'])
+def recent(self, request):
+    pass
+```
+
+### Custom URL Path
+
+```python
+@action(detail=True, methods=['post'], url_path='publish-now', url_name='publish')
+def publish_article(self, request, pk=None):
+    pass
+
+# URL: /articles/{pk}/publish-now/
+# Name: article-publish (for reverse())
+```
+
+## Customizing ViewSet Behavior
+
+### Different Serializers for Different Actions
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    
+    def get_serializer_class(self):
+        """Return different serializers based on action"""
+        if self.action == 'list':
+            return ArticleListSerializer
+        elif self.action == 'retrieve':
+            return ArticleDetailSerializer
+        return ArticleSerializer
+```
+
+### Different Querysets
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    serializer_class = ArticleSerializer
+    
+    def get_queryset(self):
+        """Filter queryset based on action and user"""
+        queryset = Article.objects.all()
+        
+        if self.action == 'list':
+            # Optimize list queries
+            queryset = queryset.select_related('author').prefetch_related('tags')
+            
+            # Filter for regular users
+            if not self.request.user.is_staff:
+                queryset = queryset.filter(published=True)
+        
+        return queryset
+```
+
+### Different Permissions
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+    
+    def get_permissions(self):
+        """Different permissions for different actions"""
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        elif self.action == 'create':
+            permission_classes = [IsAuthenticated]
+        else:
+            permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrAdmin]
+        return [permission() for permission in permission_classes]
+```
+
+### Override perform_* Methods
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+    
+    def perform_create(self, serializer):
+        """Set author on creation"""
+        serializer.save(author=self.request.user)
+    
+    def perform_update(self, serializer):
+        """Track updates"""
+        serializer.save(updated_by=self.request.user)
+    
+    def perform_destroy(self, instance):
+        """Soft delete"""
+        instance.deleted = True
+        instance.save()
+```
+
+## When to Use What?
+
+### Use Function-Based Views When:
+- You have simple, one-off endpoints
+- The logic doesn't fit the CRUD pattern
+- You prefer procedural style
+
+```python
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_avatar(request):
+    if 'file' not in request.FILES:
+        return Response({'error': 'No file provided'}, status=400)
+    # Handle upload...
+```
+
+### Use APIView When:
+- You need class-based views but not CRUD
+- You want to share code via inheritance
+- Your endpoints don't map to models
+
+```python
+class HealthCheckView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        return Response({'status': 'healthy'})
+```
+
+### Use Generic Views When:
+- You're building CRUD operations
+- You want more control than ViewSets
+- You need specific combinations of mixins
+
+```python
+class PublishedArticleList(generics.ListAPIView):
+    serializer_class = ArticleSerializer
+    
+    def get_queryset(self):
+        return Article.objects.filter(published=True)
+```
+
+### Use ViewSets When:
+- You're building a RESTful API
+- You want routers to handle URL configuration
+- Your views map to database models
+- You want related actions grouped together
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+```
+
+## Performance Tips
+
+### 1. Optimize Querysets
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    def get_queryset(self):
+        return Article.objects.select_related(
+            'author',
+            'category'
+        ).prefetch_related(
+            'tags',
+            'comments__author'
+        ).only(
+            'id', 'title', 'author__username', 'created'
+        )
+```
+
+### 2. Use Pagination
+
+```python
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+    pagination_class = PageNumberPagination
+```
+
+### 3. Cache Expensive Operations
+
+```python
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+
+class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
+    
+    @method_decorator(cache_page(60 * 15))  # 15 minutes
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+```
+
+## Summary
+
+DRF's view system offers progressive complexity:
+
+1. **Function-based views**: Maximum control, minimal magic
+2. **APIView**: Class-based, DRF request/response handling
+3. **Generic views**: CRUD operations with mixins
+4. **ViewSets**: Action-based, automatic URL routing
+
+<Tip>
+  Start with the highest abstraction that fits your needs (usually ModelViewSet), and drop down to lower levels only when you need more control.
+</Tip>

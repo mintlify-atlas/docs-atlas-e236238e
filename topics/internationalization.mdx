@@ -1,0 +1,490 @@
+---
+title: Internationalization
+description: How to add internationalization (i18n) support to Django REST Framework APIs
+---
+
+<Note>
+  Supporting internationalization is not optional. It must be a core feature.
+  
+  — [Jannis Leidel, Django Under the Hood 2015](https://youtu.be/Wa0VfS2q94Y)
+</Note>
+
+REST framework ships with translatable error messages. You can make these appear in your language by enabling [Django's standard translation mechanisms](https://docs.djangoproject.com/en/stable/topics/i18n/translation).
+
+## Benefits of Internationalization
+
+Enabling internationalization allows you to:
+
+- Select a language other than English as the default using Django's `LANGUAGE_CODE` setting
+- Allow clients to choose a language using `LocaleMiddleware` and the `Accept-Language` header
+- Provide localized error messages and validation feedback
+- Support multiple languages in your API responses
+
+## Enabling Internationalized APIs
+
+### Setting the Default Language
+
+Change the default language using Django's standard `LANGUAGE_CODE` setting:
+
+```python
+# settings.py
+LANGUAGE_CODE = "es-es"  # Spanish (Spain)
+```
+
+**Common Language Codes:**
+
+- `en-us` - English (United States)
+- `es-es` - Spanish (Spain)
+- `fr-fr` - French (France)
+- `de-de` - German (Germany)
+- `pt-br` - Portuguese (Brazil)
+- `zh-hans` - Chinese (Simplified)
+- `ja` - Japanese
+- `ko` - Korean
+
+### Per-Request Language Selection
+
+Enable per-request language selection by adding `LocaleMiddleware` to your `MIDDLEWARE` setting:
+
+```python
+# settings.py
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',  # Add this
+    'django.middleware.common.CommonMiddleware',
+    # ... other middleware
+]
+```
+
+<Info>
+  `LocaleMiddleware` should be placed after `SessionMiddleware` but before `CommonMiddleware` in the middleware list.
+</Info>
+
+### Client-Specified Language
+
+With `LocaleMiddleware` enabled, clients can specify their preferred language using the `Accept-Language` header:
+
+**Request:**
+
+```http
+GET /api/users HTTP/1.1
+Accept: application/xml
+Accept-Language: es-es
+Host: example.org
+```
+
+**Response:**
+
+```http
+HTTP/1.0 406 NOT ACCEPTABLE
+
+{"detail": "No se ha podido satisfacer la solicitud de cabecera de Accept."}
+```
+
+<Info>
+  The error message is automatically translated to Spanish based on the `Accept-Language` header.
+</Info>
+
+## Translation Coverage
+
+REST framework includes built-in translations for:
+
+- **Standard exception messages** - HTTP error responses
+- **Serializer validation errors** - Field validation messages
+- **Authentication errors** - Login and permission errors
+- **Pagination messages** - Page navigation text
+
+### Error Message Format
+
+Translations apply to error strings themselves, but the structure and field names remain unchanged:
+
+**English:**
+
+```json
+{
+  "detail": {
+    "username": ["This field must be unique."]
+  }
+}
+```
+
+**Portuguese:**
+
+```json
+{
+  "detail": {
+    "username": ["Esse campo deve ser único."]
+  }
+}
+```
+
+<Note>
+  The keys (`detail`, `username`) remain in English, while the error messages are translated.
+</Note>
+
+### Customizing Response Keys
+
+To translate response keys like `detail` and `non_field_errors`, use a [custom exception handler](/api/exceptions#custom-exception-handling):
+
+```python
+from rest_framework.views import exception_handler
+from django.utils.translation import gettext_lazy as _
+
+def custom_exception_handler(exc, context):
+    response = exception_handler(exc, context)
+    
+    if response is not None:
+        # Translate the 'detail' key
+        if 'detail' in response.data:
+            response.data[_('detail')] = response.data.pop('detail')
+    
+    return response
+```
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'myproject.utils.custom_exception_handler'
+}
+```
+
+## Specifying Supported Languages
+
+By default, all available languages are supported. To restrict to specific languages:
+
+```python
+# settings.py
+from django.utils.translation import gettext_lazy as _
+
+LANGUAGES = [
+    ('en', _('English')),
+    ('es', _('Spanish')),
+    ('fr', _('French')),
+    ('de', _('German')),
+]
+```
+
+## Adding New Translations
+
+You may need to add translations locally when:
+
+- Using REST Framework in a language not supported by the project
+- Adding custom error messages specific to your project
+
+### Translating REST Framework Messages
+
+To translate REST framework's built-in messages to a new language:
+
+**1. Create a locale directory:**
+
+```bash
+mkdir -p locale
+```
+
+**2. Configure locale paths:**
+
+```python
+# settings.py
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
+]
+```
+
+**3. Create language-specific folder:**
+
+```bash
+mkdir -p locale/pt_BR/LC_MESSAGES
+```
+
+<Info>
+  Use [locale name notation](https://docs.djangoproject.com/en/stable/topics/i18n/#term-locale-name): `de`, `pt_BR`, `es_AR`, etc.
+</Info>
+
+**4. Copy base translation file:**
+
+Download the [base django.po file](https://raw.githubusercontent.com/encode/django-rest-framework/main/rest_framework/locale/en_US/LC_MESSAGES/django.po) from REST framework source and copy it to your locale folder:
+
+```bash
+wget https://raw.githubusercontent.com/encode/django-rest-framework/main/rest_framework/locale/en_US/LC_MESSAGES/django.po \
+  -O locale/pt_BR/LC_MESSAGES/django.po
+```
+
+**5. Edit the django.po file:**
+
+```po
+#: rest_framework/exceptions.py:45
+msgid "Invalid input."
+msgstr "Entrada inválida."
+
+#: rest_framework/exceptions.py:50
+msgid "This field is required."
+msgstr "Este campo é obrigatório."
+```
+
+**6. Compile translations:**
+
+```bash
+python manage.py compilemessages -l pt_BR
+```
+
+You should see:
+
+```
+processing file django.po in /path/to/project/locale/pt_BR/LC_MESSAGES
+```
+
+**7. Restart your development server:**
+
+```bash
+python manage.py runserver
+```
+
+### Translating Custom Error Messages
+
+For custom error messages in your project:
+
+**1. Mark strings for translation:**
+
+```python
+from django.utils.translation import gettext_lazy as _
+from rest_framework import serializers
+
+class UserSerializer(serializers.Serializer):
+    username = serializers.CharField(
+        error_messages={
+            'required': _('Username is required.'),
+            'blank': _('Username cannot be blank.')
+        }
+    )
+    
+    def validate_username(self, value):
+        if len(value) < 3:
+            raise serializers.ValidationError(
+                _('Username must be at least 3 characters long.')
+            )
+        return value
+```
+
+**2. Generate message files:**
+
+```bash
+python manage.py makemessages -l pt_BR
+```
+
+**3. Edit locale/pt_BR/LC_MESSAGES/django.po:**
+
+```po
+msgid "Username is required."
+msgstr "Nome de usuário é obrigatório."
+
+msgid "Username cannot be blank."
+msgstr "Nome de usuário não pode estar vazio."
+
+msgid "Username must be at least 3 characters long."
+msgstr "Nome de usuário deve ter pelo menos 3 caracteres."
+```
+
+**4. Compile messages:**
+
+```bash
+python manage.py compilemessages -l pt_BR
+```
+
+## Language Detection Order
+
+When `LocaleMiddleware` is enabled, Django determines the language preference in this order:
+
+1. **URL language prefix** - `/es/api/users/`
+2. **Session key** - `LANGUAGE_SESSION_KEY` in session
+3. **Cookie** - Language preference cookie
+4. **Accept-Language header** - HTTP header from client
+5. **Global LANGUAGE_CODE** - Default setting
+
+### For API Clients
+
+<Info>
+  For API clients, the `Accept-Language` header is the most appropriate method. Sessions and cookies may not be available unless using session authentication.
+</Info>
+
+**Example with cURL:**
+
+```bash
+curl -H "Accept-Language: es" http://api.example.com/users/
+```
+
+**Example with JavaScript:**
+
+```javascript
+fetch('/api/users/', {
+  headers: {
+    'Accept-Language': 'es',
+    'Accept': 'application/json'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+**Example with Python requests:**
+
+```python
+import requests
+
+response = requests.get(
+    'http://api.example.com/users/',
+    headers={'Accept-Language': 'es'}
+)
+```
+
+## Language-Specific Content
+
+To serve different content based on language:
+
+```python
+from django.utils.translation import get_language, gettext as _
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class WelcomeView(APIView):
+    def get(self, request):
+        current_language = get_language()
+        
+        return Response({
+            'message': _('Welcome to our API'),
+            'language': current_language,
+            'instructions': _('Use the endpoints below to access resources.')
+        })
+```
+
+## Testing Translations
+
+### Manual Testing
+
+```bash
+# Test with Spanish
+curl -H "Accept-Language: es" http://localhost:8000/api/users/invalid-endpoint/
+
+# Test with French
+curl -H "Accept-Language: fr" http://localhost:8000/api/users/invalid-endpoint/
+```
+
+### Automated Testing
+
+```python
+from django.test import TestCase, override_settings
+from django.utils.translation import activate
+from rest_framework.test import APIClient
+
+class InternationalizationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+    
+    def test_error_message_in_spanish(self):
+        response = self.client.get(
+            '/api/users/',
+            HTTP_ACCEPT_LANGUAGE='es'
+        )
+        self.assertIn('es', response.data.get('detail', '').lower())
+    
+    def test_error_message_in_french(self):
+        with activate('fr'):
+            # Test with French language activated
+            response = self.client.get('/api/users/')
+            # Assert French error message
+            self.assertIsNotNone(response.data)
+```
+
+## Available Languages
+
+REST framework includes translations for:
+
+- Arabic (ar)
+- Chinese Simplified (zh-hans)
+- Chinese Traditional (zh-hant)
+- Czech (cs)
+- Danish (da)
+- Dutch (nl)
+- English (en)
+- Finnish (fi)
+- French (fr)
+- German (de)
+- Hungarian (hu)
+- Indonesian (id)
+- Italian (it)
+- Japanese (ja)
+- Korean (ko)
+- Norwegian (no)
+- Persian (fa)
+- Polish (pl)
+- Portuguese (pt)
+- Portuguese Brazil (pt-br)
+- Romanian (ro)
+- Russian (ru)
+- Slovak (sk)
+- Spanish (es)
+- Swedish (sv)
+- Turkish (tr)
+- Ukrainian (uk)
+
+## Contributing Translations
+
+To contribute new translations or improve existing ones:
+
+1. Fork the [REST framework repository](https://github.com/encode/django-rest-framework)
+2. Add or update translation files in `rest_framework/locale/`
+3. Follow the [Contributing to REST Framework](/community/contributing#development) guidelines
+4. Submit a pull request
+
+## Best Practices
+
+<Accordion title="Always Use Lazy Translation">
+  Use `gettext_lazy` for strings defined at the module level:
+  
+  ```python
+  from django.utils.translation import gettext_lazy as _
+  
+  # Correct - lazy evaluation
+  ERROR_MESSAGE = _('An error occurred')
+  
+  # Incorrect - evaluated at import time
+  # ERROR_MESSAGE = gettext('An error occurred')
+  ```
+</Accordion>
+
+<Accordion title="Prefer Accept-Language Header for APIs">
+  API clients should use the `Accept-Language` header rather than URL prefixes or cookies:
+  
+  ```javascript
+  headers: {
+    'Accept-Language': 'es',
+    'Content-Type': 'application/json'
+  }
+  ```
+</Accordion>
+
+<Accordion title="Test All Supported Languages">
+  Ensure your API works correctly in all supported languages:
+  
+  ```python
+  for lang_code, lang_name in settings.LANGUAGES:
+      with activate(lang_code):
+          # Test API endpoints
+          pass
+  ```
+</Accordion>
+
+<Accordion title="Provide Context for Translators">
+  Add translator comments to provide context:
+  
+  ```python
+  # Translators: This message is shown when login fails
+  error_message = _('Invalid username or password')
+  ```
+</Accordion>
+
+## Related Resources
+
+- [Django Internationalization](https://docs.djangoproject.com/en/stable/topics/i18n/) - Django's i18n documentation
+- [Exceptions](/api/exceptions) - Custom exception handlers
+- [Contributing](/community/contributing) - Contributing translations to REST framework

@@ -1,0 +1,412 @@
+---
+title: Browser Enhancements
+description: Understanding browser method overloading and format handling in Django REST Framework
+---
+
+<Note>
+  There are two noncontroversial uses for overloaded POST. The first is to *simulate* HTTP's uniform interface for clients like web browsers that don't support PUT or DELETE.
+  
+  — RESTful Web Services, Leonard Richardson & Sam Ruby
+</Note>
+
+REST framework provides several browser enhancements that allow the browsable API to function smoothly, even with browser limitations.
+
+## Browser-Based PUT, DELETE, and Other Methods
+
+As of version 3.3.0, REST framework uses JavaScript to enable browser-based `PUT`, `DELETE`, and other HTTP methods through the [ajax-form](https://github.com/tomchristie/ajax-form) library.
+
+### Using the AJAX Form Library
+
+The ajax-form library supports additional HTTP methods on HTML forms using the `data-method` attribute:
+
+```html
+<form action="/api/articles/42/" data-method="PUT">
+  <input name='title' value='Updated Title'/>
+  <input name='content' value='Updated content'/>
+  <button type="submit">Update</button>
+</form>
+```
+
+**Supported Methods:**
+
+- `PUT` - Update entire resource
+- `PATCH` - Partial update
+- `DELETE` - Delete resource
+- `POST` - Create new resource (default)
+
+<Warning>
+  **Breaking Change:** Prior to version 3.3.0, method overloading was server-side using the Ruby on Rails style. This is no longer supported due to subtle issues in request parsing. Always use the JavaScript-based approach with `data-method`.
+</Warning>
+
+### Example Forms
+
+**DELETE Form:**
+
+```html
+<form action="/api/articles/42/" data-method="DELETE">
+  <p>Are you sure you want to delete this article?</p>
+  <button type="submit" class="btn btn-danger">Delete</button>
+  <a href="/api/articles/42/" class="btn btn-default">Cancel</a>
+</form>
+```
+
+**PATCH Form:**
+
+```html
+<form action="/api/users/123/" data-method="PATCH">
+  <label>Email:</label>
+  <input name="email" type="email" value="user@example.com" />
+  
+  <label>Active:</label>
+  <input name="is_active" type="checkbox" checked />
+  
+  <button type="submit">Save Changes</button>
+</form>
+```
+
+## Browser-Based Submission of Non-Form Content
+
+The ajax-form library also supports submitting content types like JSON using special form attributes.
+
+### Content Type Override
+
+Use `data-override='content-type'` and `data-override='content'` attributes to submit JSON or other content types:
+
+```html
+<form action="/api/articles/" method="POST">
+  <!-- Hidden field to specify content type -->
+  <input data-override='content-type' value='application/json' type='hidden'/>
+  
+  <!-- Textarea for JSON content -->
+  <textarea data-override='content'>
+{
+  "title": "New Article",
+  "content": "Article body goes here",
+  "published": true
+}
+  </textarea>
+  
+  <button type="submit">Create Article</button>
+</form>
+```
+
+### Content Type Examples
+
+**JSON:**
+
+```html
+<form action="/api/data/">
+  <input data-override='content-type' value='application/json' type='hidden'/>
+  <textarea data-override='content'>{"key": "value"}</textarea>
+  <input type="submit"/>
+</form>
+```
+
+**XML:**
+
+```html
+<form action="/api/data/">
+  <input data-override='content-type' value='application/xml' type='hidden'/>
+  <textarea data-override='content'>
+<root>
+  <item>value</item>
+</root>
+  </textarea>
+  <input type="submit"/>
+</form>
+```
+
+**YAML:**
+
+```html
+<form action="/api/data/">
+  <input data-override='content-type' value='application/yaml' type='hidden'/>
+  <textarea data-override='content'>
+key: value
+items:
+  - item1
+  - item2
+  </textarea>
+  <input type="submit"/>
+</form>
+```
+
+<Info>
+  Prior to version 3.3.0, this was handled server-side. The JavaScript-based approach provides better separation of concerns and more reliable behavior.
+</Info>
+
+## URL-Based Format Suffixes
+
+REST framework supports `?format=` URL parameters for content negotiation:
+
+```bash
+# Get JSON response
+http://api.example.com/users/?format=json
+
+# Get browsable API (HTML)
+http://api.example.com/users/?format=api
+
+# Get XML response (if XMLRenderer is configured)
+http://api.example.com/users/?format=xml
+```
+
+### Configuring Format Suffixes
+
+The behavior is controlled by the `URL_FORMAT_OVERRIDE` setting:
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'URL_FORMAT_OVERRIDE': 'format',  # Default
+}
+```
+
+**Disable format override:**
+
+```python
+REST_FRAMEWORK = {
+    'URL_FORMAT_OVERRIDE': None,  # Disable ?format= parameter
+}
+```
+
+**Custom parameter name:**
+
+```python
+REST_FRAMEWORK = {
+    'URL_FORMAT_OVERRIDE': 'output',  # Use ?output=json instead
+}
+```
+
+### URL Pattern Format Suffixes
+
+You can also use format suffixes in URL patterns:
+
+```python
+from rest_framework.urlpatterns import format_suffix_patterns
+from django.urls import path
+
+urlpatterns = [
+    path('users/', UserList.as_view(), name='user-list'),
+    path('users/<int:pk>/', UserDetail.as_view(), name='user-detail'),
+]
+
+# Add format suffix patterns
+urlpatterns = format_suffix_patterns(urlpatterns)
+```
+
+This allows:
+
+```bash
+# JSON format
+http://api.example.com/users.json
+http://api.example.com/users/123.json
+
+# Browsable API format
+http://api.example.com/users.api
+http://api.example.com/users/123.api
+```
+
+## HTTP Header-Based Method Overriding (Legacy)
+
+<Warning>
+  **Removed in 3.3.0:** The semi-standard `X-HTTP-Method-Override` header is no longer supported in core. Add custom middleware if you need this functionality.
+</Warning>
+
+If you need to support the `X-HTTP-Method-Override` header for legacy clients:
+
+```python
+# middleware.py
+METHOD_OVERRIDE_HEADER = 'HTTP_X_HTTP_METHOD_OVERRIDE'
+
+class MethodOverrideMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method == 'POST' and METHOD_OVERRIDE_HEADER in request.META:
+            request.method = request.META[METHOD_OVERRIDE_HEADER]
+        return self.get_response(request)
+```
+
+```python
+# settings.py
+MIDDLEWARE = [
+    # ...
+    'myapp.middleware.MethodOverrideMiddleware',
+    # ...
+]
+```
+
+**Usage:**
+
+```bash
+curl -X POST http://api.example.com/users/123/ \
+  -H "X-HTTP-Method-Override: DELETE" \
+  -H "Authorization: Token abc123"
+```
+
+## URL-Based Accept Headers (Legacy)
+
+<Warning>
+  **Removed in 3.3.0:** The `?accept=` parameter is no longer included in core. Implement a custom content negotiation class if needed.
+</Warning>
+
+To support `?accept=application/json` style URL parameters:
+
+```python
+from rest_framework.negotiation import DefaultContentNegotiation
+
+class AcceptQueryParamOverride(DefaultContentNegotiation):
+    def get_accept_list(self, request):
+        header = request.META.get('HTTP_ACCEPT', '*/*')
+        # Override with query parameter if present
+        header = request.query_params.get('accept', header)
+        return [token.strip() for token in header.split(',')]
+```
+
+```python
+from rest_framework.views import APIView
+
+class MyAPIView(APIView):
+    content_negotiation_class = AcceptQueryParamOverride
+```
+
+**Usage:**
+
+```bash
+http://api.example.com/users/?accept=application/json
+```
+
+## HTML5 and Form Methods
+
+### Doesn't HTML5 Support PUT and DELETE?
+
+**No.** While HTML5 initially intended to support `PUT` and `DELETE` methods in forms, this was [dropped from the specification](https://www.w3.org/TR/html5-diff/#changes-2010-06-24).
+
+There is [ongoing discussion](http://amundsen.com/examples/put-delete-forms/) about:
+
+- Adding support for `PUT` and `DELETE` methods
+- Supporting content types beyond `application/x-www-form-urlencoded` and `multipart/form-data`
+
+Until HTML supports these natively, JavaScript-based solutions like ajax-form are necessary.
+
+### Current HTML Form Limitations
+
+HTML forms only support:
+
+**Methods:**
+- `GET`
+- `POST`
+
+**Content Types:**
+- `application/x-www-form-urlencoded` (default)
+- `multipart/form-data` (for file uploads)
+
+**Example of Standard HTML Form:**
+
+```html
+<!-- This works natively in all browsers -->
+<form method="POST" action="/api/users/" enctype="multipart/form-data">
+  <input type="text" name="username" />
+  <input type="file" name="avatar" />
+  <button type="submit">Create User</button>
+</form>
+```
+
+## Working with the Browsable API
+
+The browsable API uses these enhancements automatically. When you interact with forms in the browsable API:
+
+**View with GET:**
+
+![Browsable API List View](../img/browsable-api-list.png)
+
+**Edit with PUT/PATCH:**
+
+![Browsable API Edit Form](../img/browsable-api-edit.png)
+
+**Delete with DELETE:**
+
+![Browsable API Delete Form](../img/browsable-api-delete.png)
+
+### Raw Data Forms
+
+The browsable API provides raw data forms for submitting JSON, XML, or other formats:
+
+```python rest_framework/renderers.py
+def get_raw_data_form(self, data, view, method, request):
+    """
+    Returns a form that allows for arbitrary content types to be tunneled
+    via standard HTML forms.
+    """
+    media_types = [parser.media_type for parser in view.parser_classes]
+    choices = [(media_type, media_type) for media_type in media_types]
+    initial = media_types[0]
+
+    class GenericContentForm(forms.Form):
+        _content_type = forms.ChoiceField(
+            label='Media type',
+            choices=choices,
+            initial=initial,
+            widget=forms.Select(attrs={'data-override': 'content-type'})
+        )
+        _content = forms.CharField(
+            label='Content',
+            widget=forms.Textarea(attrs={'data-override': 'content'}),
+            initial=content,
+            required=False
+        )
+
+    return GenericContentForm()
+```
+
+## Best Practices
+
+<Accordion title="Use JavaScript for Method Override">
+  Always use the `data-method` attribute with the ajax-form library for method overriding. Don't implement server-side method overriding as it can cause parsing issues.
+  
+  ```html
+  <form data-method="PUT">
+    <!-- form fields -->
+  </form>
+  ```
+</Accordion>
+
+<Accordion title="Prefer URL Format Parameter">
+  Use `?format=json` for format negotiation in browser testing:
+  
+  ```
+  http://api.example.com/users/?format=json
+  ```
+</Accordion>
+
+<Accordion title="Use Proper HTTP Methods in Non-Browser Clients">
+  When building API clients (mobile apps, SPAs), use native HTTP methods rather than overrides:
+  
+  ```javascript
+  // Good - native HTTP method
+  fetch('/api/users/123/', { method: 'DELETE' })
+  
+  // Avoid - unnecessary override
+  fetch('/api/users/123/', {
+    method: 'POST',
+    headers: { 'X-HTTP-Method-Override': 'DELETE' }
+  })
+  ```
+</Accordion>
+
+<Accordion title="Test Browser Compatibility">
+  If you're using custom JavaScript enhancements, test across different browsers:
+  
+  - Chrome/Edge (Chromium)
+  - Firefox
+  - Safari
+  - Mobile browsers
+</Accordion>
+
+## Related Resources
+
+- [Browsable API](/topics/browsable-api) - Understanding the HTML interface
+- [Content Negotiation](/api/content-negotiation) - Format selection details
+- [Parsers](/api/parsers) - Request content parsing
+- [Renderers](/api/renderers) - Response content rendering

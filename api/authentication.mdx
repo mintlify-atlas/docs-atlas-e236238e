@@ -1,0 +1,363 @@
+---
+title: Authentication
+description: Authentication classes for Django REST Framework
+---
+
+## Overview
+
+Authentication is the mechanism of associating an incoming request with identifying credentials. REST framework provides several authentication schemes out of the box and allows you to implement custom schemes.
+
+Authentication runs at the start of the view, before permission and throttling checks. The `request.user` property will be set to a User instance, and `request.auth` will contain any additional authentication information.
+
+## Configuration
+
+### Global Settings
+
+Set authentication schemes globally using `DEFAULT_AUTHENTICATION_CLASSES`:
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ]
+}
+```
+
+### Per-View Settings
+
+Set authentication on individual views:
+
+```python
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+
+class ExampleView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'user': str(request.user)})
+```
+
+Or with function-based views:
+
+```python
+@api_view(['GET'])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def example_view(request):
+    return Response({'user': str(request.user)})
+```
+
+## Base Classes
+
+### BaseAuthentication
+
+All authentication classes extend `BaseAuthentication`.
+
+```python
+class BaseAuthentication:
+    def authenticate(self, request):
+        """
+        Authenticate the request and return (user, auth) tuple.
+        Return None if authentication is not attempted.
+        Raise AuthenticationFailed if authentication fails.
+        """
+        raise NotImplementedError(".authenticate() must be overridden.")
+
+    def authenticate_header(self, request):
+        """
+        Return WWW-Authenticate header value for 401 responses.
+        Return None to return 403 instead of 401.
+        """
+        pass
+```
+
+## Built-in Authentication Classes
+
+### BasicAuthentication
+
+HTTP Basic authentication against username and password. Generally only appropriate for testing.
+
+```python
+from rest_framework.authentication import BasicAuthentication
+
+class MyView(APIView):
+    authentication_classes = [BasicAuthentication]
+```
+
+**Credentials:**
+- `request.user` - Django User instance
+- `request.auth` - None
+
+**Response Header:**
+```
+WWW-Authenticate: Basic realm="api"
+```
+
+<Warning>
+Only use BasicAuthentication over HTTPS in production. API clients should never store credentials persistently.
+</Warning>
+
+**Attributes:**
+
+<ParamField path="www_authenticate_realm" type="string" default="'api'">
+  The realm to use in the WWW-Authenticate header
+</ParamField>
+
+### TokenAuthentication
+
+Simple token-based HTTP authentication. Appropriate for client-server setups like native desktop and mobile clients.
+
+```python
+from rest_framework.authentication import TokenAuthentication
+
+class MyView(APIView):
+    authentication_classes = [TokenAuthentication]
+```
+
+**Setup:**
+
+1. Add to INSTALLED_APPS:
+```python
+INSTALLED_APPS = [
+    ...
+    'rest_framework.authtoken'
+]
+```
+
+2. Run migrations:
+```bash
+python manage.py migrate
+```
+
+3. Create tokens:
+```python
+from rest_framework.authtoken.models import Token
+
+token = Token.objects.create(user=user)
+print(token.key)
+```
+
+**Header Format:**
+```
+Authorization: Token 9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b
+```
+
+**Credentials:**
+- `request.user` - Django User instance
+- `request.auth` - Token instance
+
+**Attributes:**
+
+<ParamField path="keyword" type="string" default="'Token'">
+  The keyword to use in the Authorization header (e.g., 'Bearer')
+</ParamField>
+
+<ParamField path="model" type="Model" default="None">
+  Custom token model to use instead of the default Token model
+</ParamField>
+
+#### Generating Tokens
+
+**Using Signals:**
+
+```python
+from django.conf import settings
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from rest_framework.authtoken.models import Token
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_auth_token(sender, instance=None, created=False, **kwargs):
+    if created:
+        Token.objects.create(user=instance)
+```
+
+**Via API Endpoint:**
+
+```python
+from rest_framework.authtoken import views
+
+urlpatterns = [
+    path('api-token-auth/', views.obtain_auth_token)
+]
+```
+
+POST with username and password:
+```json
+{"token": "9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b"}
+```
+
+**Using Management Command:**
+
+```bash
+python manage.py drf_create_token <username>
+python manage.py drf_create_token -r <username>  # Regenerate
+```
+
+<Warning>
+Only use TokenAuthentication over HTTPS in production.
+</Warning>
+
+### SessionAuthentication
+
+Uses Django's session framework for authentication. Appropriate for AJAX clients running in the same session context as your website.
+
+```python
+from rest_framework.authentication import SessionAuthentication
+
+class MyView(APIView):
+    authentication_classes = [SessionAuthentication]
+```
+
+**Credentials:**
+- `request.user` - Django User instance
+- `request.auth` - None
+
+**CSRF Protection:**
+
+For unsafe HTTP methods (PUT, PATCH, POST, DELETE), include a valid CSRF token. Only authenticated requests require CSRF tokens.
+
+<Warning>
+Always use Django's standard login view for login pages to ensure proper CSRF protection.
+</Warning>
+
+### RemoteUserAuthentication
+
+Delegates authentication to your web server, which sets the `REMOTE_USER` environment variable.
+
+```python
+from rest_framework.authentication import RemoteUserAuthentication
+
+class MyView(APIView):
+    authentication_classes = [RemoteUserAuthentication]
+```
+
+**Setup:**
+
+Add to AUTHENTICATION_BACKENDS:
+```python
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.RemoteUserBackend',
+]
+```
+
+**Credentials:**
+- `request.user` - Django User instance
+- `request.auth` - None
+
+**Attributes:**
+
+<ParamField path="header" type="string" default="'REMOTE_USER'">
+  Request header to grab username from (as request.META key)
+</ParamField>
+
+## Custom Authentication
+
+Implement custom authentication by subclassing `BaseAuthentication`:
+
+```python
+from django.contrib.auth.models import User
+from rest_framework import authentication, exceptions
+
+class ExampleAuthentication(authentication.BaseAuthentication):
+    def authenticate(self, request):
+        username = request.META.get('HTTP_X_USERNAME')
+        if not username:
+            return None  # Authentication not attempted
+
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise exceptions.AuthenticationFailed('No such user')
+
+        return (user, None)  # (user, auth) tuple
+```
+
+**Return Values:**
+- Return `None` if authentication is not attempted (other schemes will be tried)
+- Return `(user, auth)` tuple if authentication succeeds
+- Raise `AuthenticationFailed` if authentication is attempted but fails
+
+## Helper Functions
+
+### get_authorization_header()
+
+Returns the Authorization header as a bytestring:
+
+```python
+from rest_framework.authentication import get_authorization_header
+
+auth = get_authorization_header(request)
+# b'Token 9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b'
+```
+
+## Settings
+
+<ParamField path="DEFAULT_AUTHENTICATION_CLASSES" type="list">
+  List of authentication classes to use by default
+  
+  ```python
+  REST_FRAMEWORK = {
+      'DEFAULT_AUTHENTICATION_CLASSES': [
+          'rest_framework.authentication.SessionAuthentication',
+      ]
+  }
+  ```
+</ParamField>
+
+<ParamField path="UNAUTHENTICATED_USER" type="callable" default="django.contrib.auth.models.AnonymousUser">
+  Class to use for unauthenticated requests
+</ParamField>
+
+<ParamField path="UNAUTHENTICATED_TOKEN" type="any" default="None">
+  Value for request.auth for unauthenticated requests
+</ParamField>
+
+## Response Codes
+
+### 401 Unauthorized
+
+Returned when authentication fails and the authentication scheme provides a `WWW-Authenticate` header. The header instructs the client how to authenticate.
+
+### 403 Forbidden
+
+Returned when:
+- Authentication fails and no `WWW-Authenticate` header is provided
+- Authentication succeeds but permission is denied
+
+## Notes
+
+### Multiple Authentication Schemes
+
+REST framework attempts authentication with each class in the list. The first successful authentication sets `request.user` and `request.auth`.
+
+If no class authenticates:
+- `request.user` is set to `AnonymousUser`
+- `request.auth` is set to `None`
+
+### Django 5.1+ LoginRequiredMiddleware
+
+All DRF views are opted out of Django 5.1+ `LoginRequiredMiddleware`. Use `DEFAULT_AUTHENTICATION_CLASSES` and `DEFAULT_PERMISSION_CLASSES` instead.
+
+### Apache mod_wsgi Configuration
+
+When deploying to Apache with mod_wsgi, explicitly pass authorization headers:
+
+```apache
+WSGIPassAuthorization On
+```
+
+## Third-Party Packages
+
+- **django-rest-knox** - Per-client tokens with token expiry
+- **Django OAuth Toolkit** - OAuth 2.0 support (recommended)
+- **djangorestframework-simplejwt** - JSON Web Token authentication
+- **Djoser** - Registration, login, logout, password reset
+- **DRF Auth Kit** - JWT cookies, social login, MFA
+- **dj-rest-auth** - REST API endpoints for user management
+- **Django-Rest-Durin** - Multiple tokens per user with different expiry times
+- **django-pyoidc** - OpenID Connect (OIDC) authentication

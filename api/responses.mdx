@@ -1,0 +1,297 @@
+---
+title: 'Response'
+description: 'The Response class enables content-negotiated responses in multiple formats'
+---
+
+The `Response` class allows you to return content that can be rendered into multiple content types, depending on the client request. Unlike basic `HttpResponse` objects, `Response` objects are initialized with unrendered data.
+
+## Class Signature
+
+```python
+from rest_framework.response import Response
+
+Response(
+    data=None,
+    status=None,
+    template_name=None,
+    headers=None,
+    exception=False,
+    content_type=None
+)
+```
+
+<ParamField path="data" type="any" default="None">
+  The unrendered, serialized data for the response. Should consist of native Python primitives.
+</ParamField>
+
+<ParamField path="status" type="int" default="200">
+  HTTP status code for the response. Defaults to 200 OK.
+</ParamField>
+
+<ParamField path="template_name" type="str" default="None">
+  Template name to use if `HTMLRenderer` is selected. Only required for template responses.
+</ParamField>
+
+<ParamField path="headers" type="dict" default="None">
+  Dictionary of HTTP headers to include in the response.
+</ParamField>
+
+<ParamField path="exception" type="bool" default="False">
+  Boolean indicating if this response is for an exception. Used internally by the exception handler.
+</ParamField>
+
+<ParamField path="content_type" type="str" default="None">
+  The content type of the response. Typically set automatically by the renderer.
+</ParamField>
+
+<Warning>
+  Do not pass a Serializer instance as `data`. You must pass `serializer.data` instead, which returns the serialized representation.
+</Warning>
+
+## Creating Responses
+
+```python
+from rest_framework.response import Response
+from rest_framework import status
+
+# Simple response
+return Response({'message': 'Hello, world!'})
+
+# Response with custom status code
+return Response(
+    {'error': 'Not found'},
+    status=status.HTTP_404_NOT_FOUND
+)
+
+# Response with custom headers
+return Response(
+    {'result': 'success'},
+    headers={'X-Custom-Header': 'value'}
+)
+```
+
+## Attributes
+
+### .data
+
+```python
+response.data
+```
+
+The unrendered, serialized data of the response.
+
+<ResponseField name="data" type="any">
+  Response data as Python primitives (dict, list, string, etc.)
+</ResponseField>
+
+```python
+response = Response({'key': 'value'})
+print(response.data)  # {'key': 'value'}
+```
+
+### .status_code
+
+```python
+response.status_code
+```
+
+The numeric HTTP status code of the response.
+
+<ResponseField name="status_code" type="int">
+  HTTP status code (200, 404, 500, etc.)
+</ResponseField>
+
+```python
+response = Response(status=201)
+print(response.status_code)  # 201
+```
+
+### .status_text
+
+```python
+response.status_text
+```
+
+Returns the reason text corresponding to the HTTP status code.
+
+<ResponseField name="status_text" type="str">
+  Status reason phrase (e.g., "OK", "Not Found", "Internal Server Error")
+</ResponseField>
+
+```python
+response = Response(status=404)
+print(response.status_text)  # "Not Found"
+```
+
+### .content
+
+```python
+response.content
+```
+
+The rendered content of the response. The `.render()` method must be called before accessing this property.
+
+<ResponseField name="content" type="bytes">
+  Rendered response content as bytes
+</ResponseField>
+
+<Info>
+  The `.render()` method is called automatically by Django's response cycle. You typically don't need to call it yourself.
+</Info>
+
+### .template_name
+
+```python
+response.template_name
+```
+
+The template name, if supplied. Only required if `HTMLRenderer` or a custom template renderer is used.
+
+<ResponseField name="template_name" type="str | None">
+  Name of the template to render
+</ResponseField>
+
+### .accepted_renderer
+
+```python
+response.accepted_renderer
+```
+
+The renderer instance that will be used to render the response. Set automatically by `APIView` or `@api_view` before the response is returned.
+
+<ResponseField name="accepted_renderer" type="BaseRenderer">
+  Renderer instance (e.g., JSONRenderer, BrowsableAPIRenderer)
+</ResponseField>
+
+### .accepted_media_type
+
+```python
+response.accepted_media_type
+```
+
+The media type selected by the content negotiation stage. Set automatically by `APIView` or `@api_view`.
+
+<ResponseField name="accepted_media_type" type="str">
+  Media type string (e.g., "application/json", "text/html")
+</ResponseField>
+
+### .renderer_context
+
+```python
+response.renderer_context
+```
+
+Dictionary of additional context information passed to the renderer's `.render()` method.
+
+<ResponseField name="renderer_context" type="dict">
+  Context dictionary containing view, request, and other rendering context
+</ResponseField>
+
+## Standard HttpResponse Methods
+
+The `Response` class extends Django's `SimpleTemplateResponse`, so all standard attributes and methods are available.
+
+### Setting Headers
+
+You can set headers using dictionary-style access:
+
+```python
+response = Response({'message': 'Success'})
+response['Cache-Control'] = 'no-cache'
+response['X-Custom-Header'] = 'custom-value'
+```
+
+### .render()
+
+```python
+response.render()
+```
+
+Renders the serialized data into the final response content. This method is called automatically by Django's response cycle.
+
+<Info>
+  You typically don't need to call `.render()` yourself - it's handled automatically.
+</Info>
+
+## Example Usage
+
+### Basic Response
+
+```python
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+@api_view(['GET'])
+def hello_world(request):
+    return Response({'message': 'Hello, world!'})
+```
+
+### Response with Status Code
+
+```python
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+class ItemCreate(APIView):
+    def post(self, request):
+        serializer = ItemSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+```
+
+### Response with Custom Headers
+
+```python
+@api_view(['GET'])
+def download_file(request):
+    data = {'filename': 'example.txt', 'content': '...'}
+    response = Response(data)
+    response['Content-Disposition'] = 'attachment; filename="example.txt"'
+    return response
+```
+
+### Template Response
+
+```python
+from rest_framework.response import Response
+
+def profile_view(request):
+    data = {'user': request.user}
+    return Response(
+        data,
+        template_name='profile.html'
+    )
+```
+
+## Content Negotiation
+
+The `Response` class works seamlessly with DRF's content negotiation:
+
+```python
+@api_view(['GET'])
+def data_view(request):
+    data = {'items': [1, 2, 3]}
+    # Will be rendered as JSON, XML, etc. based on client's Accept header
+    return Response(data)
+```
+
+**Client requests with different Accept headers:**
+
+- `Accept: application/json` → Returns JSON
+- `Accept: application/xml` → Returns XML (if XMLRenderer configured)
+- `Accept: text/html` → Returns browsable API (if BrowsableAPIRenderer configured)
+
+## See Also
+
+- [Request](/api/requests) - Request class
+- [Status Codes](/api/status-codes) - HTTP status code constants
+- [Renderers](/api/renderers) - Renderer classes

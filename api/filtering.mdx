@@ -1,0 +1,247 @@
+---
+title: Filtering
+description: API reference for Django REST Framework filtering backends
+---
+
+Filter backends provide a way to filter querysets based on request parameters.
+
+## BaseFilterBackend
+
+Base class from which all filter backend classes should inherit.
+
+```python
+from rest_framework.filters import BaseFilterBackend
+```
+
+### Methods
+
+#### `filter_queryset(request, queryset, view)`
+
+Return a filtered queryset.
+
+<ParamField path="request" type="Request" required>
+  The request instance
+</ParamField>
+
+<ParamField path="queryset" type="QuerySet" required>
+  The queryset to filter
+</ParamField>
+
+<ParamField path="view" type="APIView" required>
+  The view instance
+</ParamField>
+
+#### `get_schema_operation_parameters(view)`
+
+Return a list of OpenAPI operation parameters for the filter.
+
+<ParamField path="view" type="APIView" required>
+  The view instance
+</ParamField>
+
+---
+
+## SearchFilter
+
+Provides simple search behavior based on a single query parameter.
+
+```python
+from rest_framework.filters import SearchFilter
+
+class MyView(generics.ListAPIView):
+    queryset = MyModel.objects.all()
+    serializer_class = MySerializer
+    filter_backends = [SearchFilter]
+    search_fields = ['username', 'email', '^first_name']
+```
+
+### Attributes
+
+<ParamField path="search_param" type="str">
+  The URL query parameter used for the search. Default is `'search'`
+</ParamField>
+
+<ParamField path="template" type="str">
+  Template for rendering search controls. Default is `'rest_framework/filters/search.html'`
+</ParamField>
+
+<ParamField path="lookup_prefixes" type="dict">
+  Mapping of search prefixes to Django lookup types:
+  - `^` - `istartswith` (starts with)
+  - `=` - `iexact` (exact match)
+  - `@` - `search` (full-text search)
+  - `$` - `iregex` (regex)
+</ParamField>
+
+### View Attributes
+
+Set these on your view to configure search:
+
+<ParamField path="search_fields" type="list">
+  List of field names to search. Prefix with lookup operators to change behavior:
+  - `'^username'` - Starts with search
+  - `'=email'` - Exact match
+  - `'@description'` - Full-text search
+  - `'$content'` - Regex search
+  - `'username'` - Default (contains search)
+</ParamField>
+
+### Methods
+
+#### `get_search_fields(view, request)`
+
+Return the list of search fields to use.
+
+#### `get_search_terms(request)`
+
+Extract search terms from the request query parameters.
+
+#### `construct_search(field_name, queryset)`
+
+Construct the full ORM lookup for a given field name.
+
+#### `must_call_distinct(queryset, search_fields)`
+
+Return `True` if `distinct()` should be used to query the given lookups.
+
+### Example
+
+```python
+from rest_framework import generics
+from rest_framework.filters import SearchFilter
+
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    filter_backends = [SearchFilter]
+    search_fields = ['^username', '=email', 'first_name', 'last_name']
+```
+
+Client usage:
+```
+GET /api/users/?search=john
+```
+
+---
+
+## OrderingFilter
+
+Provides simple ordering of results based on query parameters.
+
+```python
+from rest_framework.filters import OrderingFilter
+
+class MyView(generics.ListAPIView):
+    queryset = MyModel.objects.all()
+    serializer_class = MySerializer
+    filter_backends = [OrderingFilter]
+    ordering_fields = ['username', 'email']
+    ordering = ['username']  # default ordering
+```
+
+### Attributes
+
+<ParamField path="ordering_param" type="str">
+  The URL query parameter used for ordering. Default is `'ordering'`
+</ParamField>
+
+<ParamField path="ordering_fields" type="list | str">
+  List of field names that are allowed for ordering. Set to `'__all__'` to allow any field. Default is `None`
+</ParamField>
+
+<ParamField path="template" type="str">
+  Template for rendering ordering controls. Default is `'rest_framework/filters/ordering.html'`
+</ParamField>
+
+### View Attributes
+
+<ParamField path="ordering_fields" type="list | str">
+  Whitelist of field names that can be used for ordering. Special value `'__all__'` allows ordering by any field
+</ParamField>
+
+<ParamField path="ordering" type="str | list">
+  Default ordering to use if not specified by the client
+</ParamField>
+
+### Methods
+
+#### `get_ordering(request, queryset, view)`
+
+Return the ordering fields to use, or `None`.
+
+#### `get_default_ordering(view)`
+
+Return the default ordering for the view.
+
+#### `get_valid_fields(queryset, view, context=None)`
+
+Return a list of `(field_name, field_label)` tuples for valid ordering fields.
+
+#### `remove_invalid_fields(queryset, fields, view, request)`
+
+Remove any invalid fields from the ordering list.
+
+### Example
+
+```python
+from rest_framework import generics
+from rest_framework.filters import OrderingFilter
+
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    filter_backends = [OrderingFilter]
+    ordering_fields = ['username', 'email', 'date_joined']
+    ordering = ['-date_joined']  # default to newest first
+```
+
+Client usage:
+```
+GET /api/users/?ordering=username          # ascending
+GET /api/users/?ordering=-username         # descending
+GET /api/users/?ordering=username,-email   # multiple fields
+```
+
+---
+
+## DjangoFilterBackend Integration
+
+DRF provides integration with the `django-filter` library for more complex filtering:
+
+```python
+import django_filters
+from rest_framework import generics
+
+class ProductFilter(django_filters.FilterSet):
+    min_price = django_filters.NumberFilter(field_name="price", lookup_expr='gte')
+    max_price = django_filters.NumberFilter(field_name="price", lookup_expr='lte')
+    
+    class Meta:
+        model = Product
+        fields = ['category', 'in_stock']
+
+class ProductList(generics.ListAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
+    filterset_class = ProductFilter
+```
+
+---
+
+## Custom Filter Backends
+
+Create custom filter backends by subclassing `BaseFilterBackend`:
+
+```python
+from rest_framework.filters import BaseFilterBackend
+
+class IsOwnerFilterBackend(BaseFilterBackend):
+    def filter_queryset(self, request, queryset, view):
+        return queryset.filter(owner=request.user)
+
+class MyView(generics.ListAPIView):
+    queryset = MyModel.objects.all()
+    serializer_class = MySerializer
+    filter_backends = [IsOwnerFilterBackend]
+```

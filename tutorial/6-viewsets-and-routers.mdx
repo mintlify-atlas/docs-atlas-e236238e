@@ -1,0 +1,302 @@
+---
+title: "Tutorial 6: ViewSets & Routers"
+description: "Learn how to use ViewSets and Routers to simplify your API code and automatically generate URL configurations"
+---
+
+REST framework includes an abstraction for dealing with `ViewSets`, that allows the developer to concentrate on modeling the state and interactions of the API, and leave the URL construction to be handled automatically, based on common conventions.
+
+`ViewSet` classes are almost the same thing as `View` classes, except that they provide operations such as `retrieve`, or `update`, and not method handlers such as `get` or `put`.
+
+A `ViewSet` class is only bound to a set of method handlers at the last moment, when it is instantiated into a set of views, typically by using a `Router` class which handles the complexities of defining the URL conf for you.
+
+## Refactoring to use ViewSets
+
+Let's take our current set of views, and refactor them into view sets.
+
+First of all let's refactor our `UserList` and `UserDetail` classes into a single `UserViewSet` class. In the `snippets/views.py` file, we can remove the two view classes and replace them with a single ViewSet class:
+
+```python snippets/views.py
+from rest_framework import viewsets
+
+
+class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    This viewset automatically provides `list` and `retrieve` actions.
+    """
+
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+```
+
+Here we've used the `ReadOnlyModelViewSet` class to automatically provide the default 'read-only' operations. We're still setting the `queryset` and `serializer_class` attributes exactly as we did when we were using regular views, but we no longer need to provide the same information to two separate classes.
+
+Next we're going to replace the `SnippetList`, `SnippetDetail` and `SnippetHighlight` view classes. We can remove the three views, and again replace them with a single class.
+
+```python snippets/views.py
+from rest_framework import permissions
+from rest_framework import renderers
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from snippets.permissions import IsOwnerOrReadOnly
+
+
+class SnippetViewSet(viewsets.ModelViewSet):
+    """
+    This ViewSet automatically provides `list`, `create`, `retrieve`,
+    `update` and `destroy` actions.
+
+    Additionally we also provide an extra `highlight` action.
+    """
+
+    queryset = Snippet.objects.all()
+    serializer_class = SnippetSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+
+    @action(detail=True, renderer_classes=[renderers.StaticHTMLRenderer])
+    def highlight(self, request, *args, **kwargs):
+        snippet = self.get_object()
+        return Response(snippet.highlighted)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+```
+
+This time we've used the `ModelViewSet` class in order to get the complete set of default read and write operations.
+
+Notice that we've also used the `@action` decorator to create a custom action, named `highlight`. This decorator can be used to add any custom endpoints that don't fit into the standard `create`/`update`/`delete` style.
+
+Custom actions which use the `@action` decorator will respond to `GET` requests by default. We can use the `methods` argument if we wanted an action that responded to `POST` requests.
+
+The URLs for custom actions by default depend on the method name itself. If you want to change the way url should be constructed, you can include `url_path` as a decorator keyword argument.
+
+### Understanding ViewSet Classes
+
+<CardGroup cols={2}>
+  <Card title="ViewSet" icon="cube">
+    The base ViewSet class. Provides no actions by default. You define the actions yourself.
+  </Card>
+  <Card title="GenericViewSet" icon="layer-group">
+    Extends GenericAPIView and ViewSetMixin. Provides `get_object`, `get_queryset` methods but no actions.
+  </Card>
+  <Card title="ReadOnlyModelViewSet" icon="eye">
+    Provides `list` and `retrieve` actions. Ideal for read-only APIs.
+  </Card>
+  <Card title="ModelViewSet" icon="database">
+    Provides `list`, `create`, `retrieve`, `update`, `partial_update`, and `destroy` actions.
+  </Card>
+</CardGroup>
+
+## Binding ViewSets to URLs explicitly
+
+The handler methods only get bound to the actions when we define the URLConf. To see what's going on under the hood let's first explicitly create a set of views from our ViewSets.
+
+In the `snippets/urls.py` file we bind our `ViewSet` classes into a set of concrete views.
+
+```python snippets/urls.py
+from rest_framework import renderers
+from snippets.views import api_root, SnippetViewSet, UserViewSet
+
+snippet_list = SnippetViewSet.as_view({"get": "list", "post": "create"})
+snippet_detail = SnippetViewSet.as_view(
+    {"get": "retrieve", "put": "update", "patch": "partial_update", "delete": "destroy"}
+)
+snippet_highlight = SnippetViewSet.as_view(
+    {"get": "highlight"}, renderer_classes=[renderers.StaticHTMLRenderer]
+)
+user_list = UserViewSet.as_view({"get": "list"})
+user_detail = UserViewSet.as_view({"get": "retrieve"})
+```
+
+Notice how we're creating multiple views from each `ViewSet` class, by binding the HTTP methods to the required action for each view.
+
+Now that we've bound our resources into concrete views, we can register the views with the URL conf as usual.
+
+```python snippets/urls.py
+urlpatterns = format_suffix_patterns(
+    [
+        path("", api_root),
+        path("snippets/", snippet_list, name="snippet-list"),
+        path("snippets/<int:pk>/", snippet_detail, name="snippet-detail"),
+        path(
+            "snippets/<int:pk>/highlight/", snippet_highlight, name="snippet-highlight"
+        ),
+        path("users/", user_list, name="user-list"),
+        path("users/<int:pk>/", user_detail, name="user-detail"),
+    ]
+)
+```
+
+### ViewSet Action Mapping
+
+<AccordionGroup>
+  <Accordion title="List Action">
+    Maps to `GET /resources/` - Returns a list of all instances.
+    
+    ```python
+    {"get": "list"}
+    ```
+  </Accordion>
+  
+  <Accordion title="Create Action">
+    Maps to `POST /resources/` - Creates a new instance.
+    
+    ```python
+    {"post": "create"}
+    ```
+  </Accordion>
+  
+  <Accordion title="Retrieve Action">
+    Maps to `GET /resources/{id}/` - Retrieves a single instance.
+    
+    ```python
+    {"get": "retrieve"}
+    ```
+  </Accordion>
+  
+  <Accordion title="Update Actions">
+    Maps to `PUT /resources/{id}/` or `PATCH /resources/{id}/` - Updates an instance.
+    
+    ```python
+    {"put": "update", "patch": "partial_update"}
+    ```
+  </Accordion>
+  
+  <Accordion title="Destroy Action">
+    Maps to `DELETE /resources/{id}/` - Deletes an instance.
+    
+    ```python
+    {"delete": "destroy"}
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Using Routers
+
+Because we're using `ViewSet` classes rather than `View` classes, we actually don't need to design the URL conf ourselves. The conventions for wiring up resources into views and urls can be handled automatically, using a `Router` class. All we need to do is register the appropriate view sets with a router, and let it do the rest.
+
+Here's our re-wired `snippets/urls.py` file.
+
+```python snippets/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from snippets import views
+
+# Create a router and register our ViewSets with it.
+router = DefaultRouter()
+router.register(r"snippets", views.SnippetViewSet, basename="snippet")
+router.register(r"users", views.UserViewSet, basename="user")
+
+# The API URLs are now determined automatically by the router.
+urlpatterns = [
+    path("", include(router.urls)),
+]
+```
+
+Registering the ViewSets with the router is similar to providing a urlpattern. We include two arguments - the URL prefix for the views, and the view set itself.
+
+The `DefaultRouter` class we're using also automatically creates the API root view for us, so we can now delete the `api_root` function from our `views` module.
+
+### Router Features
+
+<Steps>
+  <Step title="Automatic URL generation">
+    The router automatically generates URL patterns based on the ViewSet.
+  </Step>
+  
+  <Step title="Automatic root view">
+    `DefaultRouter` includes a default root view that returns a response containing hyperlinks to all the list views.
+  </Step>
+  
+  <Step title="Custom actions support">
+    Routers automatically include URLs for custom actions defined with the `@action` decorator.
+  </Step>
+  
+  <Step title="Basename parameter">
+    The `basename` is used to generate URL names. For example, `snippet-list`, `snippet-detail`.
+  </Step>
+</Steps>
+
+### Available Routers
+
+<CardGroup cols={2}>
+  <Card title="SimpleRouter" icon="route">
+    Includes routes for the standard set of `list`, `create`, `retrieve`, `update`, `partial_update` and `destroy` actions.
+  </Card>
+  <Card title="DefaultRouter" icon="network-wired">
+    Similar to SimpleRouter, but additionally includes a default API root view that returns a response containing hyperlinks to all the list views.
+  </Card>
+</CardGroup>
+
+## Trade-offs between views vs ViewSets
+
+Using ViewSets can be a really useful abstraction. It helps ensure that URL conventions will be consistent across your API, minimizes the amount of code you need to write, and allows you to concentrate on the interactions and representations your API provides rather than the specifics of the URL conf.
+
+That doesn't mean it's always the right approach to take. There's a similar set of trade-offs to consider as when using class-based views instead of function-based views. Using ViewSets is less explicit than building your API views individually.
+
+### When to Use ViewSets
+
+<CardGroup cols={2}>
+  <Card title="Standard CRUD Operations" icon="check" color="green">
+    When your API follows standard create, read, update, delete patterns.
+  </Card>
+  <Card title="Multiple Related Endpoints" icon="check" color="green">
+    When you have list and detail views for the same model.
+  </Card>
+  <Card title="Consistent URL Structure" icon="check" color="green">
+    When you want to maintain consistent URL patterns across your API.
+  </Card>
+  <Card title="Rapid Development" icon="check" color="green">
+    When you want to reduce boilerplate and develop quickly.
+  </Card>
+</CardGroup>
+
+### When to Use Regular Views
+
+<CardGroup cols={2}>
+  <Card title="Custom Behavior" icon="times" color="red">
+    When your endpoints don't map well to standard CRUD operations.
+  </Card>
+  <Card title="One-off Endpoints" icon="times" color="red">
+    When you have standalone endpoints that don't fit a ViewSet pattern.
+  </Card>
+  <Card title="Complex Logic" icon="times" color="red">
+    When you need fine-grained control over each endpoint's behavior.
+  </Card>
+  <Card title="Explicit is Better" icon="times" color="red">
+    When you prefer explicit URL configuration for clarity.
+  </Card>
+</CardGroup>
+
+## Summary
+
+Congratulations! You've completed the Django REST Framework tutorial series. We've covered:
+
+<Steps>
+  <Step title="Serialization">
+    Creating serializers to convert between complex types and Python data types.
+  </Step>
+  
+  <Step title="Requests & Responses">
+    Using REST framework's Request and Response objects for flexible content negotiation.
+  </Step>
+  
+  <Step title="Class-Based Views">
+    Refactoring to use class-based views and generic views for cleaner code.
+  </Step>
+  
+  <Step title="Authentication & Permissions">
+    Adding authentication and fine-grained permissions to control API access.
+  </Step>
+  
+  <Step title="Relationships & Hyperlinks">
+    Creating hyperlinked APIs for better discoverability and following REST principles.
+  </Step>
+  
+  <Step title="ViewSets & Routers">
+    Using ViewSets and Routers to minimize code and automatically generate URLs.
+  </Step>
+</Steps>
+
+<Note>
+For more information, check out the [API Guide](/api/requests) for detailed documentation on all of REST framework's features.
+</Note>

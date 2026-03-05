@@ -1,0 +1,298 @@
+---
+title: Third Party Packages
+description: Ecosystem of third-party packages that extend Django REST Framework functionality
+---
+
+<Info>
+Software ecosystems establish a community that further accelerates the sharing of knowledge, content, issues, expertise and skills.
+
+— [Jan Bosch](http://www.software-ecosystems.com/Software_Ecosystems/Ecosystems.html)
+</Info>
+
+## About Third Party Packages
+
+Third Party Packages allow developers to share code that extends the functionality of Django REST framework, in order to support additional use-cases.
+
+We **support**, **encourage** and **strongly favor** the creation of Third Party Packages to encapsulate new behavior rather than adding additional functionality directly to Django REST Framework.
+
+We aim to make creating third party packages as easy as possible, whilst keeping a **simple** and **well maintained** core API. By promoting third party packages we ensure that the responsibility for a package remains with its author. If a package proves suitably popular it can always be considered for inclusion into the core REST framework.
+
+<Tip>
+If you have an idea for a new feature please consider how it may be packaged as a Third Party Package. We're always happy to discuss ideas on the [discussion group](https://groups.google.com/forum/#!forum/django-rest-framework).
+</Tip>
+
+## Creating a Third Party Package
+
+### Version Compatibility
+
+Sometimes, in order to ensure your code works on various different versions of Django, Python or third party libraries, you'll need to run slightly different code depending on the environment. Any code that branches in this way should be isolated into a `compat.py` module, and should provide a single common interface that the rest of the codebase can use.
+
+Check out Django REST framework's [compat.py](https://github.com/encode/django-rest-framework/blob/main/rest_framework/compat.py) for an example.
+
+### Publishing Your Package
+
+Once your package is decently documented and available on PyPI, you might want share it with others that might find it useful.
+
+<Steps>
+  <Step title="Add to Django Packages">
+    Add your package to the [REST Framework grid](https://www.djangopackages.com/grids/g/django-rest-framework/) on Django Packages.
+  </Step>
+  
+  <Step title="Update DRF Documentation">
+    Create a [Pull Request](https://github.com/encode/django-rest-framework/compare) on GitHub to add a link to your package in the main REST framework documentation. Add your package under **Third party packages** of the relevant API Guide section.
+  </Step>
+  
+  <Step title="Announce on Discussion Group">
+    Let others know about your package through the [discussion group](https://groups.google.com/forum/#!forum/django-rest-framework).
+  </Step>
+</Steps>
+
+## Existing Third Party Packages
+
+Django REST Framework has a growing community of developers, packages, and resources.
+
+Check out a grid detailing all the packages and ecosystem around Django REST Framework at [Django Packages](https://www.djangopackages.com/grids/g/django-rest-framework/).
+
+<Note>
+To submit new content, [create a pull request](https://github.com/encode/django-rest-framework/compare).
+</Note>
+
+### Async Support
+
+<Card title="adrf" href="https://github.com/em1208/adrf" icon="bolt">
+  Provides async Views, ViewSets, and Serializers for Django REST Framework
+</Card>
+
+### Authentication
+
+<CardGroup cols={2}>
+  <Card title="Django OAuth Toolkit" href="https://github.com/evonove/django-oauth-toolkit">
+    OAuth 2.0 support
+  </Card>
+  
+  <Card title="SimpleJWT" href="https://github.com/davesque/django-rest-framework-simplejwt">
+    JSON Web Token authentication
+  </Card>
+  
+  <Card title="Djoser" href="https://github.com/sunscrapers/djoser">
+    Registration, login, logout, and password reset views
+  </Card>
+  
+  <Card title="DRF Auth Kit" href="https://github.com/huynguyengl99/drf-auth-kit">
+    Complete REST authentication with JWT, social login, and MFA
+  </Card>
+  
+  <Card title="dj-rest-auth" href="https://github.com/iMerica/dj-rest-auth">
+    Authentication endpoints including social media auth
+  </Card>
+  
+  <Card title="DRF Passwordless" href="https://github.com/aaronn/django-rest-framework-passwordless">
+    Passwordless authentication via email and mobile
+  </Card>
+  
+  <Card title="Hawk REST" href="https://github.com/kumar303/hawkrest">
+    Hawk HTTP Authorization
+  </Card>
+  
+  <Card title="Django PyOIDC" href="https://github.com/makinacorpus/django_pyoidc">
+    OpenID Connect (OIDC) authentication support
+  </Card>
+</CardGroup>
+
+### Permissions
+
+<CardGroup cols={2}>
+  <Card title="DRF Access Policy" href="https://github.com/rsinger86/drf-access-policy">
+    Declarative permissions inspired by AWS IAM policies
+  </Card>
+  
+  <Card title="DRY Rest Permissions" href="https://github.com/FJNR-inc/dry-rest-permissions">
+    Simple way to define permissions for individual actions
+  </Card>
+  
+  <Card title="Rest Condition" href="https://github.com/caxap/rest_condition">
+    Build complex permissions in a simple way
+  </Card>
+  
+  <Card title="Axioms DRF" href="https://github.com/abhishektiwari/axioms-drf-py">
+    Fine-grained authorization with JWT tokens
+  </Card>
+</CardGroup>
+
+### Serializers
+
+<CardGroup cols={2}>
+  <Card title="DRF GIS" href="https://github.com/djangonauts/django-rest-framework-gis">
+    Geographic add-ons for spatial data
+  </Card>
+  
+  <Card title="Django Pydantic Field" href="https://github.com/surenkov/django-pydantic-field">
+    Use Pydantic models with Django's JSONField
+  </Card>
+  
+  <Card title="DRF Pydantic" href="https://github.com/georgebv/drf-pydantic">
+    Use Pydantic for data validation and serialization
+  </Card>
+  
+  <Card title="DRF JSON API" href="https://github.com/django-json-api/django-rest-framework-json-api">
+    JSON API spec compliant tools
+  </Card>
+  
+  <Card title="DRF Flex Fields" href="https://github.com/rsinger86/drf-flex-fields">
+    Dynamic field expansion via URL parameters
+  </Card>
+  
+  <Card title="Django RESTQL" href="https://github.com/yezyilomo/django-restql">
+    GraphQL-like API for field selection
+  </Card>
+  
+  <Card title="DRF Dataclasses" href="https://github.com/oxan/djangorestframework-dataclasses">
+    Automatic serializer generation for Python dataclasses
+  </Card>
+  
+  <Card title="GraphWrap" href="https://github.com/PaulGilmartin/graph_wrap">
+    Transform REST API into GraphQL API
+  </Card>
+</CardGroup>
+
+### Serializer Fields
+
+<CardGroup cols={2}>
+  <Card title="DRF Extra Fields" href="https://github.com/Hipo/drf-extra-fields">
+    Additional serializer field types
+  </Card>
+  
+  <Card title="DRF Compound Fields" href="https://github.com/estebistec/drf-compound-fields">
+    Compound serializer fields like lists of simple values
+  </Card>
+  
+  <Card title="VersatileImageField" href="https://github.com/WGBH/django-versatileimagefield">
+    Serve images in multiple sizes from a single field
+  </Card>
+</CardGroup>
+
+### Views
+
+<CardGroup cols={2}>
+  <Card title="DRF Multiple Models" href="https://github.com/MattBroach/DjangoRestMultipleModels">
+    Send multiple serialized models in one request
+  </Card>
+  
+  <Card title="DRF Typed Views" href="https://github.com/rsinger86/drf-typed-views">
+    Use type annotations for parameter validation
+  </Card>
+  
+  <Card title="Rest Framework Actions" href="https://github.com/AlexisMunera98/rest-framework-actions">
+    Control over each ViewSet action
+  </Card>
+</CardGroup>
+
+### Routers
+
+<CardGroup cols={2}>
+  <Card title="DRF Nested Routers" href="https://github.com/alanjds/drf-nested-routers">
+    Routers for working with nested resources
+  </Card>
+  
+  <Card title="wq.db.rest" href="https://wq.io/docs/about-rest">
+    Admin-style model registration with default URLs
+  </Card>
+</CardGroup>
+
+### Parsers & Renderers
+
+<CardGroup cols={2}>
+  <Card title="DRF CSV" href="https://github.com/mjumbewu/django-rest-framework-csv">
+    CSV renderer support
+  </Card>
+  
+  <Card title="DRF MessagePack" href="https://github.com/juanriaza/django-rest-framework-msgpack">
+    MessagePack renderer and parser
+  </Card>
+  
+  <Card title="DRF Camel Case" href="https://github.com/vbabiy/djangorestframework-camel-case">
+    Camel case JSON renderers and parsers
+  </Card>
+  
+  <Card title="Rest Pandas" href="https://github.com/wq/django-rest-pandas">
+    Pandas DataFrame renderers (Excel, CSV, SVG)
+  </Card>
+  
+  <Card title="DRF RapidJSON" href="https://github.com/allisson/django-rest-framework-rapidjson">
+    Fast JSON rendering with RapidJSON
+  </Card>
+</CardGroup>
+
+### Filtering
+
+<CardGroup cols={2}>
+  <Card title="Django URL Filter" href="https://github.com/miki725/django-url-filter">
+    Safe filtering via human-friendly URLs
+  </Card>
+  
+  <Card title="DRF URL Filter" href="https://github.com/manjitkumar/drf-url-filters">
+    Clean and configurable queryset filtering
+  </Card>
+  
+  <Card title="DRF Guardian" href="https://github.com/rpkilby/django-rest-framework-guardian">
+    Integration with django-guardian object permissions
+  </Card>
+</CardGroup>
+
+### Utilities
+
+<CardGroup cols={2}>
+  <Card title="DRF Extensions" href="https://github.com/chibisov/drf-extensions">
+    Collection of custom extensions
+  </Card>
+  
+  <Card title="DRF Tracking" href="https://github.com/aschn/drf-tracking">
+    Track requests to API views
+  </Card>
+  
+  <Card title="DRF Standardized Errors" href="https://github.com/ghazi-git/drf-standardized-errors">
+    Standardize error responses across endpoints
+  </Card>
+  
+  <Card title="Django Elasticsearch DSL DRF" href="https://github.com/barseghyanartur/django-elasticsearch-dsl-drf">
+    Elasticsearch integration with DRF
+  </Card>
+  
+  <Card title="Wireup" href="https://github.com/maldoinc/wireup">
+    Dependency injection with Django integration
+  </Card>
+  
+  <Card title="Apitally" href="https://github.com/apitally/apitally-py">
+    API monitoring and request logging
+  </Card>
+  
+  <Card title="Fast DRF" href="https://github.com/iashraful/fast-drf">
+    Model-based library for faster API development
+  </Card>
+  
+  <Card title="Django Lisan" href="https://github.com/Nabute/django-lisan">
+    Lightweight translation and localization framework
+  </Card>
+</CardGroup>
+
+### UI Customization
+
+<CardGroup cols={2}>
+  <Card title="DRF Restwind" href="https://github.com/youzarsiph/drf-restwind">
+    Modern UI with TailwindCSS and DaisyUI
+  </Card>
+  
+  <Card title="DRF Redesign" href="https://github.com/youzarsiph/drf-redesign">
+    Fresh look using Bootstrap 5
+  </Card>
+  
+  <Card title="DRF Material" href="https://github.com/youzarsiph/drf-material">
+    Material Design themed browsable API
+  </Card>
+</CardGroup>
+
+### Project Templates
+
+<Card title="Cookiecutter Django REST" href="https://github.com/agconti/cookiecutter-django-rest" icon="cookie">
+  Cookiecutter template for quickly starting DRF projects
+</Card>

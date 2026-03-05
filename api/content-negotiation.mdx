@@ -1,0 +1,436 @@
+---
+title: Content Negotiation
+description: API reference for Django REST Framework content negotiation classes
+---
+
+Content negotiation is the process of selecting one of multiple possible representations to return to a client, based on client or server preferences.
+
+> HTTP has provisions for several mechanisms for "content negotiation" - the process of selecting the best representation for a given response when there are multiple representations available.
+>
+> — [RFC 2616](https://www.w3.org/Protocols/rfc2616/rfc2616-sec12.html), Fielding et al.
+
+## How content negotiation works
+
+REST framework uses a simple style of content negotiation to determine which media type should be returned to a client, based on the available renderers, the priorities of each of those renderers, and the client's `Accept:` header. The style used is partly client-driven, and partly server-driven.
+
+### Priority rules
+
+1. More specific media types are given preference to less specific media types
+2. If multiple media types have the same specificity, then preference is given based on the ordering of the renderers configured for the given view
+
+### Example
+
+Given the following `Accept` header:
+
+```http
+Accept: application/json; indent=4, application/json, application/yaml, text/html, */*
+```
+
+The priorities for each of the given media types would be:
+
+1. `application/json; indent=4` (most specific)
+2. `application/json`, `application/yaml`, and `text/html` (equal specificity)
+3. `*/*` (least specific)
+
+If the requested view was only configured with renderers for YAML and HTML, then REST framework would select whichever renderer was listed first in the `renderer_classes` list or `DEFAULT_RENDERER_CLASSES` setting.
+
+For more information on the HTTP Accept header, see [RFC 2616](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html).
+
+<Note>
+**"q" values are not supported**
+
+"q" values are not taken into account by REST framework when determining preference. The use of "q" values negatively impacts caching, and in the author's opinion they are an unnecessary and overcomplicated approach to content negotiation.
+
+This is a valid approach as the HTTP spec deliberately underspecifies how a server should weight server-based preferences against client-based preferences.
+</Note>
+
+---
+
+## Built-in Content Negotiation Classes
+
+### BaseContentNegotiation
+
+`rest_framework.negotiation.BaseContentNegotiation`
+
+All content negotiation classes should extend `BaseContentNegotiation` and override the `.select_parser()` and `.select_renderer()` methods.
+
+#### Methods
+
+<ParamField path="select_parser(request, parsers)" type="method">
+  Given a list of parsers and a media type, return the appropriate parser to handle the incoming request.
+  
+  **Arguments:**
+  - `request` - The incoming request object
+  - `parsers` - List of parser instances
+  
+  **Returns:**
+  - A parser instance from the list, or `None` if none can handle the request
+</ParamField>
+
+<ParamField path="select_renderer(request, renderers, format_suffix=None)" type="method">
+  Given a request and a list of renderers, return a two-tuple of (renderer, media type).
+  
+  **Arguments:**
+  - `request` - The incoming request object
+  - `renderers` - List of renderer instances
+  - `format_suffix` - Optional format suffix from the URL
+  
+  **Returns:**
+  - A two-tuple of `(renderer, media_type)`, or raises `NotAcceptable` exception
+</ParamField>
+
+---
+
+### DefaultContentNegotiation
+
+`rest_framework.negotiation.DefaultContentNegotiation`
+
+The default content negotiation class used by REST framework.
+
+#### Attributes
+
+<ParamField path="settings" type="api_settings">
+  Reference to REST framework settings
+</ParamField>
+
+#### Parser selection
+
+The `select_parser()` method iterates through the available parsers and returns the first parser that matches the request's `Content-Type` header.
+
+```python
+def select_parser(self, request, parsers):
+    """
+    Given a list of parsers and a media type, return the appropriate
+    parser to handle the incoming request.
+    """
+    for parser in parsers:
+        if media_type_matches(parser.media_type, request.content_type):
+            return parser
+    return None
+```
+
+#### Renderer selection
+
+The `select_renderer()` method examines the `Accept` header and available renderers to determine which renderer to use for the response.
+
+The method implements the following logic:
+
+1. Check for format suffix or format query parameter override (e.g., `?format=json`)
+2. Parse the `Accept` header into a list of media types
+3. Order media types by precedence (specificity)
+4. Iterate through media types and renderers to find the best match
+5. Return the renderer and accepted media type, or raise `NotAcceptable`
+
+```python
+def select_renderer(self, request, renderers, format_suffix=None):
+    """
+    Given a request and a list of renderers, return a two-tuple of:
+    (renderer, media type).
+    """
+    # Allow URL style format override (e.g. "?format=json")
+    format_query_param = self.settings.URL_FORMAT_OVERRIDE
+    format = format_suffix or request.query_params.get(format_query_param)
+
+    if format:
+        renderers = self.filter_renderers(renderers, format)
+
+    accepts = self.get_accept_list(request)
+
+    # Check acceptable media types against each renderer
+    for media_type_set in order_by_precedence(accepts):
+        for renderer in renderers:
+            for media_type in media_type_set:
+                if media_type_matches(renderer.media_type, media_type):
+                    # Return the most specific media type as accepted
+                    return renderer, media_type
+
+    raise exceptions.NotAcceptable(available_renderers=renderers)
+```
+
+#### Methods
+
+<ParamField path="filter_renderers(renderers, format)" type="method">
+  If there is a format suffix (e.g., `.json`), filter the renderers to only those that accept that format.
+  
+  **Arguments:**
+  - `renderers` - List of renderer instances
+  - `format` - The format string (e.g., `'json'`, `'html'`)
+  
+  **Returns:**
+  - Filtered list of renderers, or raises `Http404` if no renderers match
+</ParamField>
+
+<ParamField path="get_accept_list(request)" type="method">
+  Given the incoming request, return a tokenized list of media type strings from the `Accept` header.
+  
+  **Arguments:**
+  - `request` - The incoming request object
+  
+  **Returns:**
+  - List of media type strings (defaults to `['*/*']` if no Accept header)
+</ParamField>
+
+---
+
+## Configuration
+
+### Setting content negotiation globally
+
+The default content negotiation class may be set globally using the `DEFAULT_CONTENT_NEGOTIATION_CLASS` setting:
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_CONTENT_NEGOTIATION_CLASS': 'rest_framework.negotiation.DefaultContentNegotiation',
+}
+```
+
+### Setting content negotiation per-view
+
+You can also set the content negotiation used for an individual view or viewset using the `content_negotiation_class` attribute:
+
+```python
+from rest_framework.negotiation import DefaultContentNegotiation
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+class MyView(APIView):
+    content_negotiation_class = DefaultContentNegotiation
+
+    def get(self, request, format=None):
+        return Response({'message': 'Hello, world!'})
+```
+
+---
+
+## Custom Content Negotiation
+
+It's unlikely that you'll want to provide a custom content negotiation scheme for REST framework, but you can do so if needed. To implement a custom content negotiation scheme, override `BaseContentNegotiation`.
+
+REST framework's content negotiation classes handle selection of both the appropriate parser for the request and the appropriate renderer for the response, so you should implement both the `.select_parser(request, parsers)` and `.select_renderer(request, renderers, format_suffix)` methods.
+
+### Example: Ignore client preferences
+
+The following is a custom content negotiation class which ignores the client request when selecting the appropriate parser or renderer:
+
+```python
+from rest_framework.negotiation import BaseContentNegotiation
+
+class IgnoreClientContentNegotiation(BaseContentNegotiation):
+    def select_parser(self, request, parsers):
+        """
+        Select the first parser in the `.parser_classes` list.
+        """
+        return parsers[0]
+
+    def select_renderer(self, request, renderers, format_suffix):
+        """
+        Select the first renderer in the `.renderer_classes` list.
+        """
+        return (renderers[0], renderers[0].media_type)
+```
+
+### Example: Custom media type matching
+
+Here's a more sophisticated example that implements custom media type matching logic:
+
+```python
+from rest_framework.negotiation import DefaultContentNegotiation
+from rest_framework import exceptions
+
+class CustomContentNegotiation(DefaultContentNegotiation):
+    def select_renderer(self, request, renderers, format_suffix=None):
+        """
+        Custom renderer selection that prioritizes certain media types.
+        """
+        # Check if the request explicitly wants JSON
+        accepts = self.get_accept_list(request)
+        if 'application/json' in accepts:
+            for renderer in renderers:
+                if renderer.media_type == 'application/json':
+                    return (renderer, renderer.media_type)
+        
+        # Fall back to default behavior
+        return super().select_renderer(request, renderers, format_suffix)
+```
+
+### Using custom content negotiation
+
+Once you've defined a custom content negotiation class, you can use it in your views:
+
+```python
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from myapp.negotiation import IgnoreClientContentNegotiation
+
+class NoNegotiationView(APIView):
+    """
+    An example view that does not perform content negotiation.
+    """
+    content_negotiation_class = IgnoreClientContentNegotiation
+
+    def get(self, request, format=None):
+        return Response({
+            'accepted media type': request.accepted_renderer.media_type
+        })
+```
+
+Or configure it globally in your settings:
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_CONTENT_NEGOTIATION_CLASS': 'myapp.negotiation.IgnoreClientContentNegotiation',
+}
+```
+
+---
+
+## Format Suffixes
+
+REST framework supports format suffixes (e.g., `.json`, `.html`) as a way to explicitly request a particular representation. Format suffixes override the `Accept` header during content negotiation.
+
+### Enabling format suffixes
+
+You can enable format suffixes in your URL configuration:
+
+```python
+from rest_framework.urlpatterns import format_suffix_patterns
+from django.urls import path
+from myapp import views
+
+urlpatterns = [
+    path('users/', views.UserList.as_view(), name='user-list'),
+    path('users/<int:pk>/', views.UserDetail.as_view(), name='user-detail'),
+]
+
+urlpatterns = format_suffix_patterns(urlpatterns)
+```
+
+This allows clients to request:
+
+- `GET /users/` (uses Accept header)
+- `GET /users.json` (forces JSON response)
+- `GET /users.html` (forces HTML response)
+
+### Query parameter format override
+
+You can also use a query parameter to specify the format:
+
+```http
+GET /users/?format=json
+```
+
+The query parameter name is controlled by the `URL_FORMAT_OVERRIDE` setting:
+
+```python
+REST_FRAMEWORK = {
+    'URL_FORMAT_OVERRIDE': 'format',  # Default value
+}
+```
+
+Set to `None` to disable query parameter format overrides:
+
+```python
+REST_FRAMEWORK = {
+    'URL_FORMAT_OVERRIDE': None,
+}
+```
+
+---
+
+## Related Settings
+
+### URL_FORMAT_OVERRIDE
+
+<ParamField path="URL_FORMAT_OVERRIDE" type="str" default="'format'">
+  The query parameter name that can be used to override the format. Set to `None` to disable query parameter format overrides.
+</ParamField>
+
+```python
+REST_FRAMEWORK = {
+    'URL_FORMAT_OVERRIDE': 'format',
+}
+```
+
+### DEFAULT_CONTENT_NEGOTIATION_CLASS
+
+<ParamField path="DEFAULT_CONTENT_NEGOTIATION_CLASS" type="str" default="'rest_framework.negotiation.DefaultContentNegotiation'">
+  The default content negotiation class to use.
+</ParamField>
+
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_CONTENT_NEGOTIATION_CLASS': 'rest_framework.negotiation.DefaultContentNegotiation',
+}
+```
+
+---
+
+## Media Type Matching
+
+Content negotiation uses media type matching to determine which parser or renderer to use. The matching algorithm considers:
+
+1. **Main type and subtype** - `application/json` vs `text/html`
+2. **Wildcard matching** - `*/*` matches anything, `text/*` matches all text types
+3. **Parameters** - `application/json; indent=4` includes parameters
+
+### Specificity rules
+
+More specific media types take precedence:
+
+1. `application/json; indent=4` (most specific - includes parameters)
+2. `application/json` (specific main type and subtype)
+3. `application/*` (specific main type, wildcard subtype)
+4. `*/*` (least specific - matches everything)
+
+### Example matching
+
+```python
+# Client sends:
+Accept: application/json, text/html, */*
+
+# Available renderers:
+renderer_classes = [JSONRenderer, TemplateHTMLRenderer, BrowsableAPIRenderer]
+
+# Result: JSONRenderer is selected (first specific match)
+```
+
+---
+
+## Content Type vs Accept Header
+
+### Content-Type header (request)
+
+The `Content-Type` header specifies the media type of the **request body**:
+
+```http
+POST /api/users/ HTTP/1.1
+Content-Type: application/json
+
+{"name": "John", "email": "john@example.com"}
+```
+
+REST framework uses this to select the appropriate **parser**.
+
+### Accept header (response)
+
+The `Accept` header specifies what media types the client can handle in the **response**:
+
+```http
+GET /api/users/ HTTP/1.1
+Accept: application/json, text/html
+```
+
+REST framework uses this to select the appropriate **renderer**.
+
+### Example
+
+```http
+POST /api/users/ HTTP/1.1
+Content-Type: application/json
+Accept: text/html
+
+{"name": "John"}
+```
+
+- **Request parsing**: Uses `JSONParser` (based on `Content-Type`)
+- **Response rendering**: Uses `TemplateHTMLRenderer` (based on `Accept`)

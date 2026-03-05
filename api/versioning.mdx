@@ -1,0 +1,282 @@
+---
+title: Versioning
+description: API reference for Django REST Framework versioning schemes
+---
+
+Versioning schemes determine how the API version is extracted from incoming requests.
+
+## BaseVersioning
+
+Base class for all versioning schemes.
+
+```python
+from rest_framework.versioning import BaseVersioning
+```
+
+### Attributes
+
+<ParamField path="default_version" type="str">
+  The version to use when no versioning information is present
+</ParamField>
+
+<ParamField path="allowed_versions" type="list | tuple">
+  Set of allowed versions. If set, only these versions will be accepted
+</ParamField>
+
+<ParamField path="version_param" type="str">
+  The parameter name to use for versioning. Default is `'version'`
+</ParamField>
+
+### Methods
+
+#### `determine_version(request, *args, **kwargs)`
+
+Determine the API version from the request. Must be implemented by subclasses.
+
+<ParamField path="request" type="Request" required>
+  The request instance
+</ParamField>
+
+Returns the version string or `None`.
+
+#### `reverse(viewname, args=None, kwargs=None, request=None, format=None, **extra)`
+
+Return a URL for the given view name, taking versioning into account.
+
+#### `is_allowed_version(version)`
+
+Return `True` if the version is in the allowed set.
+
+---
+
+## AcceptHeaderVersioning
+
+Versioning based on the `Accept` header with a media type parameter.
+
+```python
+from rest_framework.versioning import AcceptHeaderVersioning
+
+class MyView(APIView):
+    versioning_class = AcceptHeaderVersioning
+```
+
+### Request Example
+
+```http
+GET /bookings/ HTTP/1.1
+Host: example.com
+Accept: application/json; version=1.0
+```
+
+### Attributes
+
+<ParamField path="invalid_version_message" type="str">
+  Error message for invalid versions. Default is `'Invalid version in "Accept" header.'`
+</ParamField>
+
+---
+
+## URLPathVersioning
+
+Versioning based on URL path keyword arguments.
+
+```python
+from rest_framework.versioning import URLPathVersioning
+
+class MyView(APIView):
+    versioning_class = URLPathVersioning
+```
+
+### URL Configuration
+
+```python
+from django.urls import path, re_path
+
+urlpatterns = [
+    re_path(r'^(?P<version>[v1|v2]+)/users/$', users_list, name='users-list'),
+    re_path(r'^(?P<version>[v1|v2]+)/users/(?P<pk>[0-9]+)/$', users_detail, name='users-detail'),
+]
+```
+
+### Request Example
+
+```http
+GET /v1/bookings/ HTTP/1.1
+Host: example.com
+Accept: application/json
+```
+
+### Attributes
+
+<ParamField path="invalid_version_message" type="str">
+  Error message for invalid versions. Default is `'Invalid version in URL path.'`
+</ParamField>
+
+### Methods
+
+#### `reverse(viewname, args=None, kwargs=None, request=None, format=None, **extra)`
+
+Automatically includes the version in generated URLs.
+
+---
+
+## NamespaceVersioning
+
+Versioning based on Django URL namespaces.
+
+```python
+from rest_framework.versioning import NamespaceVersioning
+
+class MyView(APIView):
+    versioning_class = NamespaceVersioning
+```
+
+### URL Configuration
+
+```python
+from django.urls import path, include
+
+# users/urls.py
+urlpatterns = [
+    path('users/', users_list, name='users-list'),
+    path('users/<int:pk>/', users_detail, name='users-detail'),
+]
+
+# urls.py
+urlpatterns = [
+    path('v1/', include('users.urls', namespace='v1')),
+    path('v2/', include('users.urls', namespace='v2')),
+]
+```
+
+### Request Example
+
+```http
+GET /v1/users/ HTTP/1.1
+Host: example.com
+Accept: application/json
+```
+
+### Attributes
+
+<ParamField path="invalid_version_message" type="str">
+  Error message for invalid versions. Default is `'Invalid version in URL path. Does not match any version namespace.'`
+</ParamField>
+
+### Methods
+
+#### `get_versioned_viewname(viewname, request)`
+
+Return the versioned view name by prepending the namespace.
+
+---
+
+## HostNameVersioning
+
+Versioning based on the hostname.
+
+```python
+from rest_framework.versioning import HostNameVersioning
+
+class MyView(APIView):
+    versioning_class = HostNameVersioning
+```
+
+### Request Example
+
+```http
+GET /bookings/ HTTP/1.1
+Host: v1.example.com
+Accept: application/json
+```
+
+### Attributes
+
+<ParamField path="hostname_regex" type="Pattern">
+  Regex pattern to extract version from hostname. Default matches `v1.example.com` format
+</ParamField>
+
+<ParamField path="invalid_version_message" type="str">
+  Error message for invalid versions. Default is `'Invalid version in hostname.'`
+</ParamField>
+
+---
+
+## QueryParameterVersioning
+
+Versioning based on a query parameter.
+
+```python
+from rest_framework.versioning import QueryParameterVersioning
+
+class MyView(APIView):
+    versioning_class = QueryParameterVersioning
+```
+
+### Request Example
+
+```http
+GET /bookings/?version=1.0 HTTP/1.1
+Host: example.com
+Accept: application/json
+```
+
+### Attributes
+
+<ParamField path="invalid_version_message" type="str">
+  Error message for invalid versions. Default is `'Invalid version in query parameter.'`
+</ParamField>
+
+### Methods
+
+#### `reverse(viewname, args=None, kwargs=None, request=None, format=None, **extra)`
+
+Automatically includes the version as a query parameter in generated URLs.
+
+---
+
+## Example Usage
+
+### Global Configuration
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.NamespaceVersioning',
+    'DEFAULT_VERSION': 'v1',
+    'ALLOWED_VERSIONS': ['v1', 'v2'],
+    'VERSION_PARAM': 'version',
+}
+```
+
+### Per-View Configuration
+
+```python
+from rest_framework.versioning import QueryParameterVersioning
+from rest_framework.views import APIView
+
+class CustomVersioning(QueryParameterVersioning):
+    default_version = 'v1'
+    allowed_versions = ['v1', 'v2', 'v3']
+    version_param = 'api-version'
+
+class MyView(APIView):
+    versioning_class = CustomVersioning
+    
+    def get(self, request):
+        if request.version == 'v1':
+            return Response({'message': 'Version 1'})
+        return Response({'message': 'Version 2+'})
+```
+
+### Using Versions in Serializers
+
+```python
+class MyViewSet(viewsets.ModelViewSet):
+    queryset = MyModel.objects.all()
+    
+    def get_serializer_class(self):
+        if self.request.version == 'v1':
+            return MySerializerV1
+        return MySerializerV2
+```

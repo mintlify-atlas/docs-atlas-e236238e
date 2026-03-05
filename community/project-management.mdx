@@ -1,0 +1,172 @@
+---
+title: Project Management
+description: Project management processes and governance for Django REST Framework
+---
+
+<Info>
+No one can whistle a symphony; it takes a whole orchestra to play it.
+
+— Halford E. Luccock
+</Info>
+
+This document outlines our project management processes for REST framework.
+
+The aim is to ensure that the project has a high ["bus factor"](https://en.wikipedia.org/wiki/Bus_factor), and can continue to remain well supported for the foreseeable future. Suggestions for improvements to our process are welcome.
+
+## Maintenance Team
+
+<Note>
+Participating actively in the REST framework project **does not require being part of the maintenance team**. Almost every important part of issue triage and project improvement can be actively worked on regardless of your collaborator status on the repository.
+</Note>
+
+### Composition
+
+The composition of the maintenance team is handled by [@tomchristie](https://github.com/encode/). Team members will be added as collaborators to the repository.
+
+### Responsibilities
+
+Team members have the following responsibilities:
+
+<CardGroup cols={2}>
+  <Card title="Issue Management" icon="ticket">
+    - Close invalid or resolved tickets
+    - Add triage labels and milestones
+    - Search for [un-triaged issues](https://github.com/encode/django-rest-framework/issues?q=is%3Aopen+no%3Alabel)
+  </Card>
+  
+  <Card title="Code Review" icon="code-merge">
+    - Merge finalized pull requests
+    - Code changes via pull requests only
+    - Typically not merge own pull requests
+  </Card>
+  
+  <Card title="Documentation" icon="book">
+    - Build and deploy documentation
+    - Use `mkdocs gh-deploy`
+  </Card>
+  
+  <Card title="Translations" icon="language">
+    - Build and update translation packs
+  </Card>
+</CardGroup>
+
+### Further Notes for Maintainers
+
+<AccordionGroup>
+  <Accordion title="Code Changes">
+    Code changes should come in the form of a pull request - do not push directly to main.
+  </Accordion>
+  
+  <Accordion title="Pull Requests">
+    Maintainers should typically not merge their own pull requests.
+  </Accordion>
+  
+  <Accordion title="Issue Labels">
+    Each issue/pull request should have exactly one label once triaged.
+  </Accordion>
+  
+  <Accordion title="Finding Un-triaged Issues">
+    Search for un-triaged issues with: [is:open no:label](https://github.com/encode/django-rest-framework/issues?q=is%3Aopen+no%3Alabel)
+  </Accordion>
+</AccordionGroup>
+
+## Release Process
+
+### Release Manager
+
+- The release manager is selected by `@tomchristie`
+- The release manager will have the maintainer role added to PyPI package
+- The previous manager will have the maintainer role removed from PyPI package
+
+Our PyPI releases will be handled by either the current release manager, or by `@tomchristie`. Every release should have an open issue tagged with the `Release` label and marked against the appropriate milestone.
+
+### Release Checklist
+
+The following template should be used for the description of the release issue:
+
+<Steps>
+  <Step title="Create Release Notes PR">
+    Create pull request for release notes based on the milestone.
+  </Step>
+  
+  <Step title="Update Supported Versions">
+    - Update `pyproject.toml` `python_requires` list
+    - Update `pyproject.toml` Python & Django version trove classifiers
+    - Update `README` Python & Django versions
+    - Update `docs` Python & Django versions
+  </Step>
+  
+  <Step title="Increment Version">
+    Ensure the pull request increments the version in `rest_framework/__init__.py`.
+  </Step>
+  
+  <Step title="Update Release Notes">
+    - Start drafting a new release in GitHub
+    - Select the tag for the next release and previous tag
+    - Click "Generate release notes" button
+    - Copy generated content to `input.md`
+    - Run `uv tool run linkify-gh-markdown input.md`
+    - Put generated content in `release-notes.md` file
+  </Step>
+  
+  <Step title="Validate Documentation">
+    - Build and serve docs: `mkdocs serve`
+    - Validate links: `pylinkvalidate.py -P http://127.0.0.1:8000`
+  </Step>
+  
+  <Step title="Confirm with Maintainers">
+    Confirm with other maintainers that the release is finalized and ready to go.
+  </Step>
+  
+  <Step title="Include Release Date">
+    Ensure that release date is included in pull request.
+  </Step>
+  
+  <Step title="Merge Release PR">
+    Merge the release pull request.
+  </Step>
+  
+  <Step title="Tag the Release">
+    Tag the release with `git tag -a *.*.* -m 'version *.*.*'; git push --tags` or in GitHub.
+  </Step>
+  
+  <Step title="Wait for Workflow">
+    Wait for the release workflow to run. It will build the distribution, upload to Test PyPI, PyPI, and create the GitHub release.
+  </Step>
+  
+  <Step title="Announce Release">
+    - Make announcement on [discussion group](https://groups.google.com/forum/?fromgroups#!forum/django-rest-framework)
+    - Make announcement on social media (Mastodon, etc.)
+    - Post on [Django forum](https://forum.djangoproject.com/)
+  </Step>
+  
+  <Step title="Close Milestone">
+    Close the milestone on GitHub.
+  </Step>
+</Steps>
+
+<Warning>
+When pushing the release to PyPI ensure that your environment has been installed from our development `requirement.txt`, so that documentation and PyPI installs are consistently being built against a pinned set of packages.
+</Warning>
+
+<Tip>
+To modify this process for future releases make a pull request to the project management documentation.
+</Tip>
+
+## Project Ownership
+
+The PyPI package is owned by `@tomchristie`. As a backup `@j4mie` also has ownership of the package.
+
+If `@tomchristie` ceases to participate in the project then `@j4mie` has responsibility for handing over ownership duties.
+
+### Outstanding Management & Ownership Issues
+
+The following issues still need to be addressed:
+
+<Warning>
+**TODO Items:**
+
+- Ensure `@j4mie` has back-up access to the `django-rest-framework.org` domain setup and admin
+- Document ownership of the [mailing list](https://groups.google.com/forum/#!forum/django-rest-framework) and IRC channel
+- Document ownership and management of the security mailing list
+</Warning>
